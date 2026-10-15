@@ -1,33 +1,28 @@
 {
   "functions": {
-    "*.php": {
-      "runtime": "vercel-php@0.9.0"
-    },
-    "admin/*.php": {
-      "runtime": "vercel-php@0.9.0"
-    },
-    "client/*.php": {
-      "runtime": "vercel-php@0.9.0"
-    },
-    "worker/*.php": {
+    "api/index.php": {
       "runtime": "vercel-php@0.9.0"
     }
   },
   "routes": [
     {
-      "src": "^/(?:config(?:\\.local\\.example)?|layout|footer|worker_data|paymongo)\\.php$",
+      "src": "^/(?:config(?:\\.local(?:\\.example)?)?|layout|footer|worker_data|paymongo|_check|_run_migration)\\.php$",
       "status": 404
     },
     {
-      "src": "^/(?:lib|uploads)(?:/.*)?$",
+      "src": "^/(?:api|lib|uploads|\\.git)(?:/.*)?$",
       "status": 404
-    },
-    {
-      "handle": "filesystem"
     },
     {
       "src": "^/$",
-      "dest": "/index.php"
+      "dest": "/api/index.php?__chorehive_path=index.php"
+    },
+    {
+      "src": "^/(.*\\.php)$",
+      "dest": "/api/index.php?__chorehive_path=$1"
+    },
+    {
+      "handle": "filesystem"
     }
   ]
 }
