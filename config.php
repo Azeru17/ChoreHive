@@ -15,6 +15,8 @@ if (!defined('DB_PORT')) define('DB_PORT', (int)chorehive_env('DB_PORT', 3306));
 if (!defined('DB_USER')) define('DB_USER', chorehive_env('DB_USER', 'root'));
 if (!defined('DB_PASS')) define('DB_PASS', chorehive_env('DB_PASS', ''));
 if (!defined('DB_NAME')) define('DB_NAME', chorehive_env('DB_NAME', 'chorehive'));
+if (!defined('DB_SSL')) define('DB_SSL', filter_var(chorehive_env('DB_SSL', false), FILTER_VALIDATE_BOOLEAN));
+if (!defined('DB_SSL_CA')) define('DB_SSL_CA', chorehive_env('DB_SSL_CA', ''));
 if (!defined('APP_URL')) define('APP_URL', chorehive_env('APP_URL', ''));
 if (!defined('PAYMONGO_SECRET_KEY')) define('PAYMONGO_SECRET_KEY', chorehive_env('PAYMONGO_SECRET_KEY', ''));
 if (!defined('PAYMONGO_PUBLIC_KEY')) define('PAYMONGO_PUBLIC_KEY', chorehive_env('PAYMONGO_PUBLIC_KEY', ''));
@@ -31,7 +33,26 @@ if (!defined('ADMIN_EMAIL')) define('ADMIN_EMAIL', chorehive_env('ADMIN_EMAIL', 
 define('UPLOAD_DIR', __DIR__ . '/uploads');
 define('UPLOAD_MAX_BYTES', 3 * 1024 * 1024); // 3 MB per photo
 
-$conn = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME, DB_PORT);
+if (DB_SSL) {
+    $conn = mysqli_init();
+    if (!$conn) {
+        die('DB connection failed: could not initialize MySQL client.');
+    }
+    if (!defined('MYSQLI_OPT_SSL_VERIFY_SERVER_CERT')
+        || !defined('MYSQLI_CLIENT_SSL')
+        || !$conn->options(MYSQLI_OPT_SSL_VERIFY_SERVER_CERT, true)) {
+        die('DB connection failed: this PHP MySQL client cannot verify TLS certificates.');
+    }
+    if (DB_SSL_CA !== '') {
+        if (!is_file(DB_SSL_CA) || !is_readable(DB_SSL_CA)) {
+            die('DB connection failed: DB_SSL_CA must point to a readable CA certificate file.');
+        }
+        $conn->ssl_set(null, null, DB_SSL_CA, null, null);
+    }
+    $conn->real_connect(DB_HOST, DB_USER, DB_PASS, DB_NAME, DB_PORT, null, MYSQLI_CLIENT_SSL);
+} else {
+    $conn = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME, DB_PORT);
+}
 if ($conn->connect_error) die('DB connection failed: ' . $conn->connect_error);
 $conn->set_charset('utf8mb4');
 

@@ -13,6 +13,9 @@
 // define('DB_USER', 'your_db_user');
 // define('DB_PASS', 'your_db_password');
 // define('DB_NAME', 'chorehive');
+// define('DB_SSL', true);
+// Optional CA certificate file path when the system trust store is unavailable:
+// define('DB_SSL_CA', __DIR__ . '/certs/isrg-root-x1.pem');
 
 // Public site URL with no trailing slash, e.g. https://chorehive.yourdomain.com
 define('APP_URL', '');
