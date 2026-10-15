@@ -187,6 +187,21 @@ CREATE TABLE chat_messages (
   FOREIGN KEY (sender_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
+CREATE TABLE app_sessions (
+  session_id VARCHAR(128) PRIMARY KEY,
+  session_data MEDIUMBLOB NOT NULL,
+  expires_at INT UNSIGNED NOT NULL,
+  INDEX idx_app_sessions_expiry (expires_at)
+);
+
+CREATE TABLE media_files (
+  filename VARCHAR(255) PRIMARY KEY,
+  mime_type VARCHAR(40) NOT NULL,
+  file_data MEDIUMBLOB NOT NULL,
+  visibility ENUM('public','private') NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 INSERT INTO services (name,description,base_price,duration_hours) VALUES
 ('Basic Home Cleaning','Sweeping, mopping, dusting, trash disposal.',350,2),
 ('Deep Cleaning','Thorough cleaning of kitchens, bathrooms, and hard-to-reach areas.',700,4),

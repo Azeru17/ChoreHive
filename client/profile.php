@@ -15,7 +15,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_profile'])) {
         $stmt = $conn->prepare("UPDATE users SET avatar=? WHERE id=?");
         $stmt->bind_param('si', $new, $u['id']);
         $stmt->execute();
-        if ($old && is_file(UPLOAD_DIR . '/' . $old)) @unlink(UPLOAD_DIR . '/' . $old);
+        if ($old) media_delete($old);
     }
     audit_log('profile_updated', $name . ' updated their client profile');
     flash('Profile updated.');
@@ -80,7 +80,7 @@ $savedAddresses = [];
 }
 
 $u = refresh_session_user($conn) ?: $u;
-$av = avatar_url($u, '/chorehive');
+$av = avatar_url($u, ch_base());
 $stats = $conn->query("SELECT COUNT(*) total,
   SUM(status='completed') completed,
   COALESCE(SUM(CASE WHEN payment_status='paid' THEN total_price END),0) spent

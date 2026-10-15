@@ -162,11 +162,11 @@ Set `APP_URL` to the public HTTPS origin (no trailing slash) so PayMongo return 
 
 ## Vercel preview deployment status
 
-ChoreHive is a PHP/MySQL application, not a static site. Vercel's PHP option is a community runtime, and the app is **not ready to deploy to Vercel by simply importing this folder**. Before enabling a preview deployment, the application needs a PHP entry-point/routing setup and external services for MySQL, shared PHP sessions, private photo/object storage, and email. PHP function filesystems are not persistent, so the existing `uploads/` and `email_outbox.log` paths cannot be treated as durable storage there. Keep booking photos behind `photo.php` authorization when moving them to object storage.
+ChoreHive uses Vercel's community PHP runtime configured in `vercel.json`; PHP is not an official Vercel runtime. The project uses TiDB Cloud for MySQL-compatible data. Set the Vercel environment variables `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASS`, and `DB_NAME`; set `DB_SSL=true` to require TLS and server-certificate verification. `DB_SSL_CA` is optional when the runtime's trust store is sufficient. The runtime needs a PHP version with `mysqli`, `mysqlnd`, and `openssl`.
 
-`config.php` now accepts environment variables for database, database TLS (`DB_SSL`, optional `DB_SSL_CA` CA-certificate path), site URL, PayMongo, email, and the local payment-demo flag; existing `config.local.php` constants still take precedence on local development. For TiDB Cloud Starter, set `DB_SSL=true` so `mysqli` uses TLS and verifies the server certificate. The `.vercelignore` file excludes local secrets, uploads, database dumps, migrations, and development-only scripts from the Vercel upload. It does not, by itself, make the app deployable.
+Vercel functions do not have durable local files or shared file sessions. The app automatically selects database sessions and database-backed images when `VERCEL` is present (override with `SESSION_DRIVER` and `MEDIA_STORAGE` only if needed). Before deploying, apply `migration_vercel_storage.sql` to the already-created TiDB database; a fresh database bootstrap already includes the `app_sessions` and `media_files` tables. This migration only creates two new tables and preserves existing data. `media_files` stores images in TiDB, including private booking photos served only through the authorization checks in `photo.php`. Images therefore count toward the TiDB storage quota; keep the 3 MB upload limit and review storage usage as the app grows.
 
-Do not deploy until the external services and routing/session/storage changes have been configured and tested. Never put secrets in source control or use the local seed accounts on a public preview.
+Use `APP_URL` for the public site origin when configuring email or PayMongo return/webhook URLs. Configure SMTP before relying on email workflows; the local email-log fallback is not persistent on Vercel. Keep PayMongo credentials only in Vercel environment variables, and leave payment demo mode disabled. `.vercelignore` excludes local secrets, uploads, SQL files, migrations, and development-only scripts. This deployment setup still requires a successful Vercel build plus live smoke tests for TLS database connectivity, sessions, uploads, and protected photos before the preview can be considered working.
 
 
 ## Marketplace discovery and chat workflow
@@ -179,7 +179,7 @@ The chat UI refreshes messages by polling every three seconds (near-real-time po
 
 ### Database update for existing installations
 
-If you already imported `db.sql` before these features, back up your database and apply only missing migrations in the order listed under **Upgrading an existing installation** above. In particular, `migration_payments_maps.sql` must run before the booking pages that rely on its payment and map fields, and the final `migration_new_features.sql` adds listing approval, cancellation reasons, client start acknowledgements, announcement titles, saved addresses, favorites, and worker portfolios. New installations can import the updated `db.sql` as usual.
+If you already imported `db.sql` before these features, back up your database and apply only missing migrations in the order listed under **Upgrading an existing installation** above. In particular, `migration_payments_maps.sql` must run before the booking pages that rely on its payment and map fields, and the final `migration_new_features.sql` adds listing approval, cancellation reasons, client start acknowledgements, announcement titles, saved addresses, favorites, and worker portfolios. For a fresh hosted database, use `db.production.sql` to avoid local demo accounts; `db.sql` includes local-only test users and sample bookings.
 
 ### Chat behavior
 

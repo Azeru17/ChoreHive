@@ -26,8 +26,8 @@ if (!$allowed) {
 }
 
 $filename = basename((string)$photo['filepath']);
-$path = UPLOAD_DIR . '/' . $filename;
-$image = is_file($path) ? @getimagesize($path) : false;
+$media = media_read($filename, true);
+$image = $media ? @getimagesizefromstring($media['file_data']) : false;
 $mimeTypes = ['image/jpeg', 'image/png', 'image/webp'];
 if ($image === false || !in_array($image['mime'], $mimeTypes, true)) {
     http_response_code(404);
@@ -35,8 +35,8 @@ if ($image === false || !in_array($image['mime'], $mimeTypes, true)) {
 }
 
 header('Content-Type: ' . $image['mime']);
-header('Content-Length: ' . (string)filesize($path));
+header('Content-Length: ' . (string)strlen($media['file_data']));
 header('Content-Disposition: inline; filename="' . $filename . '"');
 header('Cache-Control: private, no-store');
 header('X-Content-Type-Options: nosniff');
-readfile($path);
+echo $media['file_data'];

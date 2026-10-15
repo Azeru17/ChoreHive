@@ -16,7 +16,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_profile'])) {
         $stmt = $conn->prepare("UPDATE users SET avatar=? WHERE id=?");
         $stmt->bind_param('si', $new, $u['id']);
         $stmt->execute();
-        if ($old && is_file(UPLOAD_DIR . '/' . $old)) @unlink(UPLOAD_DIR . '/' . $old);
+        if ($old) media_delete($old);
     }
     audit_log('profile_updated', $name . ' updated their worker profile');
     flash('Profile updated.');
@@ -56,7 +56,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_portfolio'])) 
     $st->execute();
     $row = $st->get_result()->fetch_assoc();
     if ($row) {
-        if (is_file(UPLOAD_DIR . '/' . $row['image'])) @unlink(UPLOAD_DIR . '/' . $row['image']);
+        media_delete($row['image']);
         $del = $conn->prepare("DELETE FROM worker_portfolio WHERE id=? AND worker_id=?");
         $del->bind_param('ii', $id, $u['id']);
         $del->execute();
@@ -187,7 +187,7 @@ require '../layout.php';
     <div class="portfolio-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;">
       <?php while ($p = $portfolio->fetch_assoc()): ?>
         <figure class="portfolio-item" style="margin:0;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#fff;">
-          <img src="<?= e(ch_base() . '/uploads/' . $p['image']) ?>" alt="<?= e($p['caption'] ?: 'Portfolio photo') ?>" style="width:100%;height:160px;object-fit:cover;display:block;">
+          <img src="<?= e(media_url($p['image'], ch_base())) ?>" alt="<?= e($p['caption'] ?: 'Portfolio photo') ?>" style="width:100%;height:160px;object-fit:cover;display:block;">
           <?php if ($p['caption']): ?><figcaption style="padding:8px 10px;font-size:.82rem;"><?= e($p['caption']) ?></figcaption><?php endif; ?>
           <form method="post" style="padding:0 10px 10px;">
             <?= csrf_field() ?>

@@ -1,6 +1,4 @@
 <?php
-session_start();
-
 if (is_file(__DIR__ . '/config.local.php')) {
     require __DIR__ . '/config.local.php';
 }
@@ -15,8 +13,10 @@ if (!defined('DB_PORT')) define('DB_PORT', (int)chorehive_env('DB_PORT', 3306));
 if (!defined('DB_USER')) define('DB_USER', chorehive_env('DB_USER', 'root'));
 if (!defined('DB_PASS')) define('DB_PASS', chorehive_env('DB_PASS', ''));
 if (!defined('DB_NAME')) define('DB_NAME', chorehive_env('DB_NAME', 'chorehive'));
-if (!defined('DB_SSL')) define('DB_SSL', filter_var(chorehive_env('DB_SSL', false), FILTER_VALIDATE_BOOLEAN));
+if (!defined('DB_SSL')) define('DB_SSL', filter_var(chorehive_env('DB_SSL', chorehive_env('VERCEL') !== ''), FILTER_VALIDATE_BOOLEAN));
 if (!defined('DB_SSL_CA')) define('DB_SSL_CA', chorehive_env('DB_SSL_CA', ''));
+if (!defined('SESSION_DRIVER')) define('SESSION_DRIVER', chorehive_env('SESSION_DRIVER', chorehive_env('VERCEL') !== '' ? 'database' : 'file'));
+if (!defined('MEDIA_STORAGE')) define('MEDIA_STORAGE', chorehive_env('MEDIA_STORAGE', chorehive_env('VERCEL') !== '' ? 'database' : 'local'));
 if (!defined('APP_URL')) define('APP_URL', chorehive_env('APP_URL', ''));
 if (!defined('PAYMONGO_SECRET_KEY')) define('PAYMONGO_SECRET_KEY', chorehive_env('PAYMONGO_SECRET_KEY', ''));
 if (!defined('PAYMONGO_PUBLIC_KEY')) define('PAYMONGO_PUBLIC_KEY', chorehive_env('PAYMONGO_PUBLIC_KEY', ''));
@@ -32,6 +32,12 @@ if (!defined('ADMIN_EMAIL')) define('ADMIN_EMAIL', chorehive_env('ADMIN_EMAIL', 
 
 define('UPLOAD_DIR', __DIR__ . '/uploads');
 define('UPLOAD_MAX_BYTES', 3 * 1024 * 1024); // 3 MB per photo
+if (!in_array(SESSION_DRIVER, ['file', 'database'], true)) {
+    die('Invalid SESSION_DRIVER. Use "file" or "database".');
+}
+if (!in_array(MEDIA_STORAGE, ['local', 'database'], true)) {
+    die('Invalid MEDIA_STORAGE. Use "local" or "database".');
+}
 
 if (DB_SSL) {
     $conn = mysqli_init();
@@ -55,6 +61,20 @@ if (DB_SSL) {
 }
 if ($conn->connect_error) die('DB connection failed: ' . $conn->connect_error);
 $conn->set_charset('utf8mb4');
+
+if (SESSION_DRIVER === 'database') {
+    require_once __DIR__ . '/lib/DatabaseSessionHandler.php';
+    session_set_save_handler(new ChoreHiveDatabaseSessionHandler($conn), true);
+}
+$requestIsHttps = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+    || strtolower((string)($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '')) === 'https';
+session_set_cookie_params([
+    'httponly' => true,
+    'secure' => $requestIsHttps,
+    'samesite' => 'Lax',
+    'path' => '/',
+]);
+session_start();
 
 /* ---------- Portable base path ----------
  * Derives the app's web-root-relative base (e.g. "/chorehive") from the
@@ -230,8 +250,7 @@ function delete_booking_record($booking_id) {
     $res = $conn->query("SELECT filepath FROM booking_photos WHERE booking_id=$booking_id");
     $freed = 0;
     while ($p = $res->fetch_assoc()) {
-        $file = UPLOAD_DIR . '/' . basename($p['filepath']);
-        if (is_file($file) && @unlink($file)) $freed++;
+        if (media_delete($p['filepath'])) $freed++;
     }
     $stmt = $conn->prepare("DELETE FROM bookings WHERE id=?");
     $stmt->bind_param('i', $booking_id);
@@ -268,11 +287,104 @@ function refresh_session_user($conn) {
 }
 function avatar_file($user) {
     $f = $user['avatar'] ?? '';
-    return (!empty($f) && is_file(UPLOAD_DIR . '/' . basename($f))) ? basename($f) : '';
+    return (!empty($f) && media_exists($f)) ? basename($f) : '';
 }
 function avatar_url($user, $base) {
     $f = avatar_file($user);
-    return $f ? rtrim($base, '/') . '/uploads/' . $f : '';
+    return $f ? media_url($f, $base) : '';
+}
+function media_url($filename, $base) {
+    $filename = basename((string)$filename);
+    if ($filename === '') return '';
+    if (MEDIA_STORAGE === 'database') {
+        return rtrim($base, '/') . '/media.php?file=' . rawurlencode($filename);
+    }
+    return rtrim($base, '/') . '/uploads/' . rawurlencode($filename);
+}
+function media_exists($filename) {
+    global $conn;
+    $filename = basename((string)$filename);
+    if ($filename === '') return false;
+    if (MEDIA_STORAGE === 'database') {
+        $stmt = $conn->prepare('SELECT 1 FROM media_files WHERE filename=?');
+        $stmt->bind_param('s', $filename);
+        $stmt->execute();
+        $exists = (bool)$stmt->get_result()->fetch_row();
+        $stmt->close();
+        return $exists;
+    }
+    return is_file(UPLOAD_DIR . '/' . $filename);
+}
+function media_store($filename, $temporaryPath, $mimeType, $visibility) {
+    global $conn;
+    $filename = basename((string)$filename);
+    if (!in_array($visibility, ['public', 'private'], true)) {
+        throw new InvalidArgumentException('Invalid media visibility.');
+    }
+    if (MEDIA_STORAGE === 'database') {
+        $data = file_get_contents($temporaryPath);
+        if ($data === false) fail('Could not read the uploaded picture.');
+        $stmt = $conn->prepare('INSERT INTO media_files (filename, mime_type, file_data, visibility) VALUES (?, ?, ?, ?)');
+        $stmt->bind_param('ssss', $filename, $mimeType, $data, $visibility);
+        $ok = $stmt->execute();
+        $stmt->close();
+        if (!$ok) fail('Could not save the uploaded picture.');
+        return true;
+    }
+    if (!is_dir(UPLOAD_DIR) && !mkdir(UPLOAD_DIR, 0755, true) && !is_dir(UPLOAD_DIR)) {
+        fail('Could not prepare image storage.');
+    }
+    if (!move_uploaded_file($temporaryPath, UPLOAD_DIR . '/' . $filename)) {
+        fail('Could not save the uploaded picture.');
+    }
+    return true;
+}
+function media_read($filename, $allowPrivate = false) {
+    global $conn;
+    $filename = basename((string)$filename);
+    if ($filename === '') return null;
+    if (MEDIA_STORAGE === 'database') {
+        $stmt = $conn->prepare(
+            'SELECT mime_type, file_data FROM media_files WHERE filename=?' .
+            ($allowPrivate ? '' : " AND visibility='public'")
+        );
+        $stmt->bind_param('s', $filename);
+        $stmt->execute();
+        $media = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        return $media ?: null;
+    }
+    if (!$allowPrivate) {
+        $stmt = $conn->prepare(
+            'SELECT 1 FROM users WHERE avatar=? UNION ALL SELECT 1 FROM worker_portfolio WHERE image=? LIMIT 1'
+        );
+        $stmt->bind_param('ss', $filename, $filename);
+        $stmt->execute();
+        $public = (bool)$stmt->get_result()->fetch_row();
+        $stmt->close();
+        if (!$public) return null;
+    }
+    $path = UPLOAD_DIR . '/' . $filename;
+    if (!is_file($path)) return null;
+    $data = file_get_contents($path);
+    $mimeType = $data === false ? false : (new finfo(FILEINFO_MIME_TYPE))->buffer($data);
+    if ($data === false || !is_string($mimeType)) return null;
+    return ['mime_type' => $mimeType, 'file_data' => $data];
+}
+function media_delete($filename) {
+    global $conn;
+    $filename = basename((string)$filename);
+    if ($filename === '') return false;
+    if (MEDIA_STORAGE === 'database') {
+        $stmt = $conn->prepare('DELETE FROM media_files WHERE filename=?');
+        $stmt->bind_param('s', $filename);
+        $stmt->execute();
+        $deleted = $stmt->affected_rows > 0;
+        $stmt->close();
+        return $deleted;
+    }
+    $path = UPLOAD_DIR . '/' . $filename;
+    return is_file($path) && @unlink($path);
 }
 function initials($name) {
     $parts = preg_split('/\s+/', trim((string)$name)) ?: [];
@@ -294,8 +406,7 @@ function handle_avatar_upload($field, $user_id, $conn) {
     if ($info === false || !isset($allowed[$info['mime']])) fail('Only JPG, PNG or WebP images are allowed.');
     if ($info[0] > 4000 || $info[1] > 4000) fail('That image is too large (max 4000x4000).');
     $name = 'av' . (int)$user_id . '_' . bin2hex(random_bytes(6)) . '.' . $allowed[$info['mime']];
-    if (!is_dir(UPLOAD_DIR)) mkdir(UPLOAD_DIR, 0755, true);
-    if (!move_uploaded_file($f['tmp_name'], UPLOAD_DIR . '/' . $name)) fail('Could not save the picture.');
+    media_store($name, $f['tmp_name'], $info['mime'], 'public');
     return $name;
 }
 function handle_portfolio_upload($field, $worker_id) {
@@ -308,8 +419,7 @@ function handle_portfolio_upload($field, $worker_id) {
     $allowed = ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp'];
     if ($info === false || !isset($allowed[$info['mime']])) fail('Only JPG, PNG or WebP images are allowed.');
     $name = 'pf' . (int)$worker_id . '_' . bin2hex(random_bytes(8)) . '.' . $allowed[$info['mime']];
-    if (!is_dir(UPLOAD_DIR)) mkdir(UPLOAD_DIR, 0755, true);
-    if (!move_uploaded_file($f['tmp_name'], UPLOAD_DIR . '/' . $name)) fail('Could not save the portfolio photo.');
+    media_store($name, $f['tmp_name'], $info['mime'], 'public');
     return $name;
 }
 function delete_avatar($conn, $user_id) {
@@ -318,8 +428,7 @@ function delete_avatar($conn, $user_id) {
     $stmt->execute();
     $r = $stmt->get_result()->fetch_assoc();
     if ($r && !empty($r['avatar'])) {
-        $file = UPLOAD_DIR . '/' . basename($r['avatar']);
-        if (is_file($file)) @unlink($file);
+        media_delete($r['avatar']);
     }
     $stmt = $conn->prepare("UPDATE users SET avatar=NULL WHERE id=?");
     $stmt->bind_param('i', $user_id);
@@ -450,8 +559,7 @@ function handle_photo_upload($field, $booking_id, $stage, $conn) {
 
     $ext  = $allowed[$info['mime']];
     $name = 'b' . (int)$booking_id . '_' . preg_replace('/[^a-z]/', '', $stage) . '_' . bin2hex(random_bytes(8)) . '.' . $ext;
-    if (!is_dir(UPLOAD_DIR)) mkdir(UPLOAD_DIR, 0755, true);
-    if (!move_uploaded_file($f['tmp_name'], UPLOAD_DIR . '/' . $name)) fail('Could not save the uploaded photo.');
+    media_store($name, $f['tmp_name'], $info['mime'], 'private');
 
     $stmt = $conn->prepare("INSERT INTO booking_photos (booking_id,stage,filepath) VALUES (?,?,?)");
     $bid = (int)$booking_id;

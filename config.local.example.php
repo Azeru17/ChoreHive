@@ -16,6 +16,9 @@
 // define('DB_SSL', true);
 // Optional CA certificate file path when the system trust store is unavailable:
 // define('DB_SSL_CA', __DIR__ . '/certs/isrg-root-x1.pem');
+// Optional: database-backed session and image storage (requires migration_vercel_storage.sql):
+// define('SESSION_DRIVER', 'database');
+// define('MEDIA_STORAGE', 'database');
 
 // Public site URL with no trailing slash, e.g. https://chorehive.yourdomain.com
 define('APP_URL', '');

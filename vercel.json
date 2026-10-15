@@ -1,0 +1,33 @@
+{
+  "functions": {
+    "*.php": {
+      "runtime": "vercel-php@0.9.0"
+    },
+    "admin/*.php": {
+      "runtime": "vercel-php@0.9.0"
+    },
+    "client/*.php": {
+      "runtime": "vercel-php@0.9.0"
+    },
+    "worker/*.php": {
+      "runtime": "vercel-php@0.9.0"
+    }
+  },
+  "routes": [
+    {
+      "src": "^/(?:config(?:\\.local\\.example)?|layout|footer|worker_data|paymongo)\\.php$",
+      "status": 404
+    },
+    {
+      "src": "^/(?:lib|uploads)(?:/.*)?$",
+      "status": 404
+    },
+    {
+      "handle": "filesystem"
+    },
+    {
+      "src": "^/$",
+      "dest": "/index.php"
+    }
+  ]
+}
