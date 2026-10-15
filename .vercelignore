@@ -1,0 +1,9 @@
+config.local.php
+email_outbox.log
+uploads/*
+!uploads/.htaccess
+db.sql
+migration_*.sql
+_check.php
+_run_migration.php
+ChoreHive System2.docx

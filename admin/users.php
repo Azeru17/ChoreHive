@@ -1,0 +1,229 @@
+<?php
+require '../config.php';
+$u = require_role('admin');
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && (isset($_POST['approve_worker']) || isset($_POST['revoke_worker']))) {
+    verify_csrf();
+    $field = isset($_POST['approve_worker']) ? 'approve_worker' : 'revoke_worker';
+    $wid = v_int($field, 1, PHP_INT_MAX, 'Worker');
+    $approved = $field === 'approve_worker' ? 1 : 0;
+    $stmt = $conn->prepare("UPDATE users SET worker_approved=? WHERE id=? AND role='worker'");
+    $stmt->bind_param('ii', $approved, $wid);
+    $stmt->execute();
+    if ($stmt->affected_rows !== 1) fail('Worker profile not found or its marketplace status is already up to date.');
+    $nameStmt = $conn->prepare("SELECT name FROM users WHERE id=? AND role='worker'");
+    $nameStmt->bind_param('i', $wid);
+    $nameStmt->execute();
+    $workerName = $nameStmt->get_result()->fetch_assoc()['name'] ?? 'Worker';
+    $verb = $approved ? 'approved for marketplace listing' : 'removed from the marketplace';
+    notify_and_email($wid, "Your ChoreHive profile was $verb by an administrator.", 'Worker marketplace status updated');
+    audit_log($approved ? 'worker_marketplace_approved' : 'worker_marketplace_unapproved', "Admin {$u['name']} $verb: worker #$wid ($workerName)");
+    flash($approved ? 'Worker profile approved for marketplace listing.' : 'Worker profile removed from marketplace listings.');
+    header('Location: users.php'); exit;
+}
+
+/* ---------- CREATE ---------- */
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create'])) {
+    verify_csrf();
+    $name  = v_str('name', 100, true, 'Name');
+    $email = v_email();
+    $role  = in_array($_POST['role'] ?? '', ['client','worker','admin'], true) ? $_POST['role'] : fail('Invalid role.');
+    if (strlen($_POST['password'] ?? '') < 8) fail('Password must be at least 8 characters.');
+    $chk = $conn->query("SELECT id FROM users WHERE email='" . $conn->real_escape_string($email) . "'")->fetch_assoc();
+    if ($chk) fail('That email is already registered.');
+    $pass = password_hash($_POST['password'], PASSWORD_DEFAULT);
+    $stmt = $conn->prepare("INSERT INTO users (name,email,password,role) VALUES (?,?,?,?)");
+    $stmt->bind_param('ssss', $name, $email, $pass, $role);
+    $stmt->execute();
+    $new_id = $conn->insert_id;
+    notify_and_email($new_id, "Welcome to ChoreHive, $name! Your account was created by an administrator.", 'Account created');
+    audit_log('user_created', "Admin {$u['name']} created $role account for $name <$email>");
+    flash('User created.');
+    header('Location: users.php'); exit;
+}
+
+/* ---------- UPDATE ---------- */
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update'])) {
+    verify_csrf();
+    $uid = v_int('update', 1, PHP_INT_MAX, 'User');
+    $name  = v_str('name', 100, true, 'Name');
+    $email = v_email();
+    $role  = in_array($_POST['role'] ?? '', ['client','worker','admin'], true) ? $_POST['role'] : fail('Invalid role.');
+    if ($uid === $u['id'] && $role !== 'admin') fail('You cannot change your own role.');
+    $current = $conn->prepare("SELECT role FROM users WHERE id=?");
+    $current->bind_param('i', $uid);
+    $current->execute();
+    $currentRole = $current->get_result()->fetch_assoc()['role'] ?? null;
+    if ($currentRole === null) fail('User not found.');
+    $dup = $conn->query("SELECT id FROM users WHERE email='" . $conn->real_escape_string($email) . "' AND id<>$uid")->fetch_assoc();
+    if ($dup) fail('Another account already uses that email.');
+    if (!empty($_POST['password'])) {
+        if (strlen($_POST['password']) < 8) fail('Password must be at least 8 characters.');
+        $pass = password_hash($_POST['password'], PASSWORD_DEFAULT);
+        $stmt = $conn->prepare("UPDATE users SET name=?, email=?, role=?, password=? WHERE id=?");
+        $stmt->bind_param('ssssi', $name, $email, $role, $pass, $uid);
+    } else {
+        $stmt = $conn->prepare("UPDATE users SET name=?, email=?, role=? WHERE id=?");
+        $stmt->bind_param('sssi', $name, $email, $role, $uid);
+    }
+    $stmt->execute();
+    if ($currentRole !== $role) {
+        $revokeApproval = $conn->prepare("UPDATE users SET worker_approved=0 WHERE id=?");
+        $revokeApproval->bind_param('i', $uid);
+        $revokeApproval->execute();
+    }
+    audit_log('user_updated', "Admin {$u['name']} updated user #$uid ($name, role $role)");
+    flash('User updated.');
+    header('Location: users.php'); exit;
+}
+
+/* ---------- DELETE ---------- */
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete'])) {
+    verify_csrf();
+    $uid = v_int('delete', 1, PHP_INT_MAX, 'User');
+    if ($uid === $u['id']) fail('You cannot delete your own account.');
+    $target = $conn->query("SELECT name FROM users WHERE id=$uid")->fetch_assoc();
+    if (!$target) fail('User not found.');
+    $stmt = $conn->prepare("DELETE FROM users WHERE id=?");
+    $stmt->bind_param('i', $uid);
+    $stmt->execute();
+    audit_log('user_deleted', "deleted user #$uid ({$target['name']})");
+    flash('User deleted.', 'error');
+    header('Location: users.php'); exit;
+}
+
+/* ---------- Badges (award / revoke) ---------- */
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['award'])) {
+    verify_csrf();
+    $wid = v_int('worker_id', 1, PHP_INT_MAX, 'Worker');
+    $name = v_str('badge_name', 80, true, 'Badge name');
+    $chk = $conn->query("SELECT id FROM users WHERE id=$wid AND role='worker'")->fetch_assoc();
+    if ($chk) {
+        $stmt = $conn->prepare("INSERT INTO badges (worker_id,name,description) VALUES (?,?,'Awarded by admin.')");
+        $stmt->bind_param('is', $wid, $name);
+        $stmt->execute();
+        notify_and_email($wid, "You earned a new badge: '$name'. Keep up the great work!", 'Badge earned');
+        audit_log('badge_awarded', "Admin {$u['name']} awarded '$name' to worker #$wid");
+        flash('Badge awarded!');
+    } else {
+        fail('Selected worker does not exist.');
+    }
+    header('Location: users.php'); exit;
+}
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['revoke'])) {
+    verify_csrf();
+    $bid = v_int('revoke', 1, PHP_INT_MAX, 'Badge');
+    $stmt = $conn->prepare("DELETE FROM badges WHERE id=?");
+    $stmt->bind_param('i', $bid);
+    $stmt->execute();
+    flash('Badge revoked.', 'error');
+    header('Location: users.php'); exit;
+}
+
+$title = 'Manage Users';
+require '../layout.php';
+
+$edit = null;
+if (isset($_GET['edit'])) {
+    $eid = (int)$_GET['edit'];
+    $edit = $conn->query("SELECT * FROM users WHERE id=$eid")->fetch_assoc();
+}
+$res = $conn->query("SELECT u.*,
+  CASE WHEN u.role='worker' THEN (SELECT COUNT(*) FROM bookings b WHERE b.worker_id=u.id)
+       ELSE (SELECT COUNT(*) FROM bookings b WHERE b.client_id=u.id) END jobs,
+  (SELECT COUNT(*) FROM bookings ba WHERE ba.worker_id=u.id AND ba.status IN ('assigned','in_progress','awaiting_verification')) active_worker_jobs,
+  (SELECT last_seen FROM worker_presence wp WHERE wp.worker_id=u.id) worker_last_seen
+  FROM users u ORDER BY u.role, u.name");
+$workers = $conn->query("SELECT id,name FROM users WHERE role='worker'")->fetch_all(MYSQLI_ASSOC);
+$badges = $conn->query("SELECT bg.*, u.name worker FROM badges bg JOIN users u ON u.id=bg.worker_id ORDER BY bg.worker_id");
+?>
+<h1>Manage Users</h1>
+
+<div class="card">
+  <h2><?= $edit ? '✏️ Edit user #' . $edit['id'] : '➕ Create user' ?></h2>
+  <form method="post" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:0 14px;">
+    <?= csrf_field() ?>
+    <?php if ($edit): ?><input type="hidden" name="update" value="<?= $edit['id'] ?>"><?php endif; ?>
+    <div><label>Full name</label><input name="name" maxlength="100" value="<?= e($edit['name'] ?? '') ?>" required></div>
+    <div><label>Email</label><input type="email" name="email" maxlength="120" value="<?= e($edit['email'] ?? '') ?>" required></div>
+    <div><label>Role</label>
+      <select name="role">
+        <?php foreach (['client'=>'Client','worker'=>'Worker','admin'=>'Admin'] as $rv => $rl): ?>
+          <option value="<?= $rv ?>" <?= ($edit['role'] ?? '') === $rv ? 'selected' : '' ?>><?= $rl ?></option>
+        <?php endforeach; ?>
+      </select>
+    </div>
+    <div><label><?= $edit ? 'New password (leave blank to keep)' : 'Password (min 8)' ?></label>
+      <input type="password" name="password" minlength="8" <?= $edit ? '' : 'required' ?>></div>
+    <div style="align-self:end;">
+      <button name="<?= $edit ? 'update' : 'create' ?>" value="<?= $edit ? $edit['id'] : 1 ?>"><?= $edit ? '💾 Save changes' : '➕ Create user' ?></button>
+      <?php if ($edit): ?> <a class="btn btn-sec" href="users.php">Cancel</a><?php endif; ?>
+    </div>
+  </form>
+</div>
+
+<div class="card">
+  <h2>All Users</h2>
+  <div class="table-wrap">
+  <table>
+    <tr><th>ID</th><th>Name</th><th>Email</th><th>Role</th><th>Jobs</th><th>Marketplace status</th><th>Listing review</th><th>Actions</th></tr>
+    <?php while ($usr = $res->fetch_assoc()): ?>
+      <tr>
+        <td>#<?= $usr['id'] ?></td>
+        <td><b><?= e($usr['name']) ?></b><?= $usr['id'] == $u['id'] ? ' <span class="muted">(you)</span>' : '' ?></td>
+        <td><?= e($usr['email']) ?></td>
+        <td><span class="badge <?= $usr['role']==='admin' ? 'err' : ($usr['role']==='worker' ? 'info' : 'ok') ?>"><?= e($usr['role']) ?></span></td>
+        <td><?= (int)$usr['jobs'] ?></td>
+        <td><?php if ($usr['role'] === 'worker'): $isOnline = !empty($usr['worker_last_seen']) && strtotime($usr['worker_last_seen']) >= time()-300; $isBusy = (int)$usr['active_worker_jobs'] > 0; ?><span class="availability-pill <?= $isBusy ? 'busy' : 'available' ?>"><i></i><?= $isBusy ? 'Busy' : 'Available' ?></span><small class="admin-worker-presence <?= $isOnline ? 'is-online' : '' ?>"><?= $isOnline ? 'Recently active' : 'Offline' ?></small><?php else: ?><span class="muted">—</span><?php endif; ?></td>
+        <td><?php if ($usr['role'] === 'worker'): ?>
+          <span class="badge <?= (int)$usr['worker_approved'] ? 'ok' : 'warn' ?>"><?= (int)$usr['worker_approved'] ? 'Listed' : 'Pending review' ?></span>
+          <form method="post" style="margin-top:6px;" onsubmit="return confirm('<?= (int)$usr['worker_approved'] ? 'Remove this profile from public worker listings?' : 'Approve this profile for marketplace listing?' ?>');">
+            <?= csrf_field() ?>
+            <?php if ((int)$usr['worker_approved']): ?>
+              <button name="revoke_worker" value="<?= (int)$usr['id'] ?>" class="btn btn-sm btn-outline">Revoke listing</button>
+            <?php else: ?>
+              <button name="approve_worker" value="<?= (int)$usr['id'] ?>" class="btn btn-sm">Approve listing</button>
+            <?php endif; ?>
+          </form>
+        <?php else: ?><span class="muted">—</span><?php endif; ?></td>
+        <td>
+          <div class="actions">
+            <a class="btn btn-sm btn-sec" href="?edit=<?= $usr['id'] ?>">Edit</a>
+            <?php if ($usr['id'] != $u['id']): ?>
+            <form method="post" onsubmit="return confirm('Delete <?= e($usr['name']) ?>? This also removes their bookings, photos and feedback.')">
+              <?= csrf_field() ?><button name="delete" value="<?= $usr['id'] ?>" class="btn btn-sm btn-danger">Delete</button>
+            </form>
+            <?php endif; ?>
+          </div>
+        </td>
+      </tr>
+    <?php endwhile; ?>
+  </table>
+  </div>
+  <p class="muted" style="margin-top:10px;">Marketplace approval is an internal profile/listing review only. It does not mean identity or background checks have been completed.</p>
+</div>
+
+<div class="card">
+  <h2>Award a Skill Badge</h2>
+  <form method="post" style="display:flex;gap:8px;align-items:end;flex-wrap:wrap;">
+    <?= csrf_field() ?>
+    <div><label>Worker</label>
+      <select name="worker_id"><?php foreach ($workers as $w): ?><option value="<?= $w['id'] ?>"><?= e($w['name']) ?></option><?php endforeach; ?></select>
+    </div>
+    <div style="flex:1;"><label>Badge name</label><input name="badge_name" maxlength="80" placeholder="e.g. Deep Cleaning Expert" required></div>
+    <button name="award" value="1">🏅 Award</button>
+  </form>
+</div>
+
+<div class="card">
+  <h2>Workers &amp; Badges</h2>
+  <div class="table-wrap">
+  <table>
+    <?php while ($b = $badges->fetch_assoc()): ?>
+      <tr><td>🏅 <b><?= e($b['name']) ?></b></td><td><?= e($b['worker']) ?></td><td><?= e($b['description']) ?></td>
+      <td><form method="post"><?= csrf_field() ?><button name="revoke" value="<?= $b['id'] ?>" class="btn btn-sm btn-sec">Revoke</button></form></td></tr>
+    <?php endwhile; ?>
+  </table>
+  </div>
+</div>
+<?php require '../footer.php'; ?>

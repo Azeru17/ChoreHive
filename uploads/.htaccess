@@ -1,0 +1,9 @@
+# Uploaded files: never execute scripts, only serve images
+php_flag engine off
+<FilesMatch "^(?!b[0-9]+_(before|after)_[a-f0-9]{16}\.(?i:jpe?g|png|webp)$).*\.(?i:jpe?g|png|webp)$">
+  Require all granted
+</FilesMatch>
+<FilesMatch "^(?:b[0-9]+_(before|after)_[a-f0-9]{16}\.(?i:jpe?g|png|webp)$|(?!.*\.(?i:jpe?g|png|webp)$).*)$">
+  Require all denied
+</FilesMatch>
+Options -Indexes

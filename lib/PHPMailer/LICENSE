@@ -1,0 +1,3 @@
+PHPMailer is licensed under the GNU Lesser General Public License, version 2.1.
+See https://github.com/PHPMailer/PHPMailer
+This project vendors PHPMailer v6.9.3 source files under src/.

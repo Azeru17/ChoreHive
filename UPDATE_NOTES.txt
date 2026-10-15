@@ -1,0 +1,37 @@
+CHOREHIVE UPDATE — PAYMONGO CHECKOUT AND HOSTINGER-READY EMAIL
+
+IMPORTANT: Back up your current htdocs/chorehive folder and your chorehive database first.
+
+IF YOU ALREADY HAVE CHOREHIVE RUNNING IN XAMPP:
+1. Keep your existing files, then copy the updated PHP/SQL over C:\xampp\htdocs\chorehive.
+2. Copy config.local.example.php to config.local.php and add PayMongo test keys (and SMTP when you have Hostinger email).
+3. Open http://localhost/phpmyadmin and apply only migrations that have not already been run, in this order:
+   a. migration_marketplace_chat.sql
+   b. migration_payments_maps.sql
+   c. migration_paymongo.sql
+   d. migration_new_features.sql
+4. Do NOT re-import db.sql over an existing database; it is for fresh installations.
+5. Open http://localhost/chorehive/client/dashboard.php and press Ctrl+F5.
+
+FOR A FRESH INSTALLATION:
+1. Copy the chorehive folder into C:\xampp\htdocs\.
+2. Start Apache and MySQL in XAMPP.
+3. Create/select the chorehive database and import db.sql (the current schema; do not run upgrade migrations on top).
+4. Copy config.local.example.php to config.local.php and fill PayMongo (and SMTP later).
+5. Open http://localhost/chorehive/.
+
+FEATURE NOTES:
+- New worker profiles require admin approval for marketplace listing; approval is not identity/background verification.
+- Booking photos are private and loaded through the authenticated photo endpoint; keep the uploads access rules.
+- Admin/worker booking totals are gross completed booking value, not platform revenue or verified worker payouts.
+- Clients can cancel any active booking themselves, including online-paid or started jobs; online payments are not automatically refunded, so refund requests still require support.
+- The customer must always type the full service address manually. Map pinning is optional.
+- Worker job pages provide map and directions links when coordinates are saved.
+- Cash is confirmed by the customer only after the worker marks the job done and the customer has reviewed the result.
+- GCash and Maya are processed by PayMongo Checkout. There is no in-app OTP page.
+- The worker cannot start an online-method booking while its payment status is unpaid.
+- Paid bookings show a ChoreHive receipt (PayMongo payment id as the reference for online payments).
+- The map uses Leaflet and OpenStreetMap tiles; an internet connection is required for map assets/tiles.
+
+HOSTINGER:
+Place config.local.php on the server only. Set APP_URL, database overrides, PayMongo keys, SMTP, and the webhook URL https://YOUR_DOMAIN/paymongo_webhook.php. Do not import the local .test seed users for production; register real accounts.

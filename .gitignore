@@ -1,0 +1,4 @@
+config.local.php
+email_outbox.log
+uploads/*
+!uploads/.htaccess

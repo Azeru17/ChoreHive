@@ -1,0 +1,3 @@
+<FilesMatch "^(?:_check|_run_migration)\.php$">
+  Require all denied
+</FilesMatch>
