@@ -396,6 +396,35 @@ body.adminpage table.fixed-cols td small { word-break: break-all; font-size: .72
 /* Tell the admin the last columns live off-screen on a narrow window. */
 body.adminpage .table-scroll-hint { margin: 10px 2px 0; color: var(--muted, #6b7a90); font-size: .78rem; }
 
+/* ---------- Admin top bar on phones ---------- */
+/* The admin bar is a .admin-top div, not a <header>, so the app's mobile
+   header rules never applied to it and every control ended up jammed
+   against the edges. */
+@media (max-width: 700px) {
+  body.adminpage .admin-top {
+    height: auto; min-height: 58px;
+    gap: 8px; padding: 0 12px;
+  }
+  /* `margin:0 auto` (set at <=1240px) was competing with the userbox's own
+     margin-left:auto, splitting the free space and crowding the bar. */
+  body.adminpage .admin-top .admin-brand { margin: 0; flex: 0 0 auto; font-size: 1.05rem; gap: 8px; }
+  body.adminpage .admin-top .admin-brand img { width: 30px; height: 30px; }
+  body.adminpage .admin-top .admin-brand .console { display: none; }
+  body.adminpage .admin-top .menu-btn { padding: 8px 10px; }
+  body.adminpage .admin-top .userbox { margin-left: auto; gap: 6px; flex-shrink: 0; }
+  body.adminpage .admin-top .userbox .who span:not(.avatar) { display: none; }
+  body.adminpage .admin-top .userbox .avatar.sm { width: 32px; height: 32px; }
+  body.adminpage .admin-top .userbox .bell { padding: 6px 9px; min-width: 38px; min-height: 38px; }
+  /* The full "Logout" label cannot fit beside Menu, the brand and the avatar,
+     so it collapses to an icon-only control that still keeps its tooltip. */
+  body.adminpage .admin-top .userbox > a:last-child {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 40px; min-height: 40px; padding: 8px 10px;
+    font-size: 0; border-radius: var(--radius-pill);
+  }
+  body.adminpage .admin-top .userbox > a:last-child i { font-size: 1.2rem; margin: 0; }
+}
+
 /* ---------- Manage users table ---------- */
 /* The identifier column sizes to its own content and never breaks, so it stays
    correct at 1 digit or 10. `width:1%` + `white-space:nowrap` lets the column
