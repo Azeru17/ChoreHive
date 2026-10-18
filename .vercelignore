@@ -6,6 +6,7 @@ tools/
 db.sql
 db.production.sql
 migration_*.sql
+tidb_*.sql
 _check.php
 _run_migration.php
 ChoreHive System2.docx

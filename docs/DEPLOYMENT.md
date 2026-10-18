@@ -52,21 +52,47 @@ you can see exactly what is missing.
 
 ## 2. Create the schema
 
-Option A — the schema file (recommended for a brand new database):
+### Fastest path — paste into the TiDB web SQL editor
+
+Generate the file locally, then paste it into the **SQL Editor** in the TiDB
+Cloud console:
+
+```bash
+php tools/export_sql.php --demo-only --out=tidb_demo_data.sql
+```
+
+Open the file, copy everything, paste it into the TiDB SQL editor, and run it.
+One file, no extra tools, nothing to install.
+
+- `tidb_demo_data.sql` — full schema **plus** sample data (recommended for a
+  demo or defence, so the dashboards are not empty)
+- `php tools/export_sql.php --out=tidb_schema.sql` — schema only, if you want a
+  genuinely empty database
+
+The export is read back out of a running database with `SHOW CREATE TABLE` and
+ordered by foreign-key dependency, so it always matches the schema the app
+actually runs against. Every statement is `DROP`/`CREATE`-based, so re-running
+it just rebuilds the tables.
+
+> Uploaded photos are not included: they are binary and impractical to paste
+> into a browser. Their tables are still created, so pages simply show an
+> empty photo list rather than broken images.
+
+### Alternative — command line
 
 ```bash
 mysql --host=<HOST> --port=4000 --user=<USER> --password \
-      --ssl-mode=REQUIRED < db.production.sql
+      --ssl-mode=VERIFY_IDENTITY --ssl-ca=ca.pem < db.production.sql
 ```
 
-Option B — the bundled runner, which applies every migration in order and is
-safe to re-run:
+Or use the bundled runner, which applies every migration in order and is safe
+to re-run:
 
 ```bash
 php tools/migrate.php
 ```
 
-Both end with the same verification block:
+Both approaches end with the same verification block:
 
 ```
 --- schema check ---
@@ -230,4 +256,10 @@ php tools/migrate.php --check            # verify schema, change nothing
 php tools/seed_demo_data.php             # add demo data
 php tools/seed_demo_data.php --reset     # remove demo data (asks to confirm)
 php tools/seed_demo_data.php --reset --force
+php tools/export_sql.php                 # write tidb_schema.sql
+php tools/export_sql.php --demo-only     # write tidb_demo_data.sql (schema + sample rows)
+php tools/export_sql.php --data          # write every row in the database
 ```
+
+`export_sql.php` output is a local artefact: it is gitignored and excluded from
+the Vercel bundle, because it contains password hashes and sample data.
