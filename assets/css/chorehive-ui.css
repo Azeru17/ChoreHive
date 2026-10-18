@@ -361,7 +361,7 @@ body.adminpage .table-wrap th { font-size: .68rem; letter-spacing: .03em; }
    mangling every cell ("PAY-4A7CA / C", the Save button pushed out of its
    row). Below the comfortable width the table now scrolls as one unit
    instead of collapsing into unreadable stacks. */
-body.adminpage .table-wrap > table.fixed-cols { table-layout: fixed; min-width: 940px; }
+body.adminpage .table-wrap > table.fixed-cols { table-layout: fixed; min-width: 1080px; }
 body.adminpage table.fixed-cols th, body.adminpage table.fixed-cols td { word-break: normal; }
 /* `anywhere` breaks mid-word; `break-word` only breaks a token that truly
    cannot fit, which keeps payment references and addresses readable. */
@@ -375,7 +375,11 @@ body.adminpage .admin-assignment-form .btn { flex: 0 0 auto; padding: 6px 13px; 
 /* Booking rows read cleaner when the identifier never breaks and every cell
    shares one baseline, padding and alignment. */
 body.adminpage table.fixed-cols th,
-body.adminpage table.fixed-cols td { vertical-align: middle; padding: 12px 10px; }
+body.adminpage table.fixed-cols td { vertical-align: middle; padding: 13px 14px; }
+/* Long statuses such as "awaiting verification" were overflowing the cell and
+   painting over the Payment column, because .badge is nowrap by default.
+   Letting the badge wrap keeps every label inside its own column. */
+body.adminpage table.fixed-cols .badge { white-space: normal; line-height: 1.3; }
 body.adminpage table.fixed-cols td:first-child,
 body.adminpage table.fixed-cols th:first-child { white-space: nowrap; }
 body.adminpage table.fixed-cols td:first-child { font-variant-numeric: tabular-nums; font-weight: 700; color: #183657; }

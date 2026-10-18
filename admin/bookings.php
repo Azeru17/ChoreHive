@@ -103,7 +103,7 @@ $pinnedBookings = (int)$conn->query("SELECT COUNT(*) c FROM bookings WHERE addre
   <?php endif; ?>
   <div class="table-wrap">
   <table class="fixed-cols">
-    <colgroup><col style="width:5%"><col style="width:11%"><col style="width:12%"><col style="width:11%"><col style="width:12%"><col style="width:9%"><col style="width:11%"><col style="width:21%"><col style="width:8%"></colgroup>
+    <colgroup><col style="width:5%"><col style="width:11%"><col style="width:11%"><col style="width:11%"><col style="width:11%"><col style="width:12%"><col style="width:11%"><col style="width:20%"><col style="width:8%"></colgroup>
     <tr><th>ID</th><th>Client</th><th>Service</th><th>Schedule</th><th>Location</th><th>Status</th><th>Payment</th><th>Assign worker</th><th></th></tr>
     <?php while ($b = $res->fetch_assoc()): ?>
     <tr>
