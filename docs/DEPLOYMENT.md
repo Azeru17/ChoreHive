@@ -58,55 +58,63 @@ Generate the file locally, then paste it into the **SQL Editor** in the TiDB
 Cloud console:
 
 ```bash
-php tools/export_sql.php --demo-only --for-editor --out=tidb_editor.sql
+php tools/export_sql.php --demo-only --out=tidb_demo_data.sql
 ```
 
-1. In the TiDB Cloud console, open the **SQL Editor** and check the database
-   selector at the top. Note the name (usually `test`).
-2. Open `tidb_editor.sql`, copy everything, paste it into the editor, and run.
-3. In Vercel, set `DB_NAME` to that same database name.
+Open the file, copy everything, paste it into the TiDB SQL editor, and run it.
+One file, no extra tools, nothing to install.
 
-This file deliberately contains **no `CREATE DATABASE` and no `USE`**. The
-TiDB Cloud user usually does not have `CREATE` privilege on the server, so a
-`USE chorehive` header fails with `Unknown database 'chorehive'`. Without those
-lines the script simply applies to whichever database the editor is already
-connected to.
-
-> If you would rather the database be called `chorehive`, create it from the
-> TiDB console's "New Schema" button first, select it in the editor, paste the
-> same file, and set `DB_NAME=chorehive`.
-
-`tidb_editor.sql` holds the full schema **plus** sample data, so the dashboards
-are not empty on a demo or defence. For a genuinely empty database:
-
-```bash
-php tools/export_sql.php --for-editor --out=tidb_editor.sql   # schema only
-```
+- `tidb_demo_data.sql` — full schema **plus** sample data (recommended for a
+  demo or defence, so the dashboards are not empty)
+- `php tools/export_sql.php --out=tidb_schema.sql` — schema only, if you want a
+  genuinely empty database
 
 The export is read back out of a running database with `SHOW CREATE TABLE` and
 ordered by foreign-key dependency, so it always matches the schema the app
 actually runs against. Every statement is `DROP`/`CREATE`-based, so re-running
 it just rebuilds the tables.
 
-> Uploaded photos are not included: they are binary and impractical to paste
-> into a browser. Their tables are still created, so pages simply show an
-> empty photo list rather than broken images.
+> **If the web editor reports something like
+> `Table 'chorehive.chat_messages' doesn't exist`, stop.** The editor's
+> statement splitter mis-parsed the paste and only ran part of the script, so
+> the `CREATE TABLE` statements never executed. Split the file and paste the
+> parts in order instead:
+>
+> ```bash
+> php tools/export_sql.php --demo-only --out=tidb_import.sql --split=5
+> ```
+>
+> That writes `tidb_import_part1.sql` … `tidb_import_part5.sql`. Paste
+> **part1, then part2, … part5**, in that order. Every part is independently
+> runnable and repeats `CREATE DATABASE` / `USE`, so you cannot end up in the
+> wrong schema.
 
-### Alternative — command line
+> TiDB Cloud's **Import** page only accepts CSV, and the **SQL Files** tab in
+> the SQL editor is for saving your own queries, so neither can run a `.sql`
+> file. Pasting is the only in-browser option, and if it misbehaves use the
+> one-command route below instead.
+
+### Recommended — one command from your machine
+
+This is more reliable than pasting, because the runner executes each statement
+individually and reports exactly what failed. Set the variables once:
+
+```powershell
+$env:DB_HOST="<HOST>"; $env:DB_PORT="4000"; $env:DB_USER="<USER>"
+$env:DB_PASS="<PASSWORD>"; $env:DB_NAME="chorehive"; $env:DB_SSL="1"
+
+php tools/migrate.php            # creates the schema
+php tools/seed_demo_data.php     # loads the sample data, including photos
+```
+
+### Alternative — plain MySQL client
 
 ```bash
 mysql --host=<HOST> --port=4000 --user=<USER> --password \
       --ssl-mode=VERIFY_IDENTITY --ssl-ca=ca.pem < db.production.sql
 ```
 
-Or use the bundled runner, which applies every migration in order and is safe
-to re-run:
-
-```bash
-php tools/migrate.php
-```
-
-Both approaches end with the same verification block:
+All three routes end with the same verification block:
 
 ```
 --- schema check ---
@@ -273,6 +281,7 @@ php tools/seed_demo_data.php --reset --force
 php tools/export_sql.php                 # write tidb_schema.sql
 php tools/export_sql.php --demo-only     # write tidb_demo_data.sql (schema + sample rows)
 php tools/export_sql.php --data          # write every row in the database
+php tools/export_sql.php --split=5       # write tidb_import_part1..5.sql for pasting
 ```
 
 `export_sql.php` output is a local artefact: it is gitignored and excluded from
