@@ -391,6 +391,28 @@ body.adminpage table.fixed-cols th {
 body.adminpage table.fixed-cols td small { word-break: break-all; font-size: .72rem; line-height: 1.35; }
 /* Tell the admin the last columns live off-screen on a narrow window. */
 body.adminpage .table-scroll-hint { margin: 10px 2px 0; color: var(--muted, #6b7a90); font-size: .78rem; }
+
+/* ---------- Manage users table ---------- */
+/* The identifier column sizes to its own content and never breaks, so it stays
+   correct at 1 digit or 10. `width:1%` + `white-space:nowrap` lets the column
+   grow with the number instead of forcing a wrap. */
+body.adminpage table.users-table .user-id {
+  width: 1%; white-space: nowrap;
+  font-variant-numeric: tabular-nums; font-weight: 700; color: #183657;
+}
+body.adminpage table.users-table th { white-space: nowrap; }
+/* Emails must not be cut mid-word (the global `anywhere` was splitting
+   "carlo@demo.chorehive.test" across two lines). */
+body.adminpage table.users-table .user-email { overflow-wrap: break-word; }
+/* View + Delete belong on one line. */
+body.adminpage table.users-table .actions { flex-wrap: nowrap; gap: 7px; }
+body.adminpage table.users-table .actions form { margin: 0; }
+/* Button labels must never break ("Vie / w"). */
+body.adminpage table.users-table .actions .btn,
+body.adminpage table.users-table td button { white-space: nowrap; }
+/* Give the eight columns room; below that the table scrolls as one unit
+   rather than crushing every cell. */
+body.adminpage .table-wrap > table.users-table { min-width: 900px; }
 /* Keep long admin headings/actions from colliding at common laptop widths. */
 body.adminpage .container { min-width: 0; width: auto; }
 body.adminpage .container h1 { max-width: 100%; }

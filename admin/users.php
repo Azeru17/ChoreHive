@@ -187,13 +187,13 @@ $badges = $conn->query("SELECT bg.*, u.name worker FROM badges bg JOIN users u O
   <h2>All Users</h2>
   <p class="muted">Users register themselves through the registration page. Admins can view and delete accounts.</p>
   <div class="table-wrap">
-  <table>
+  <table class="users-table">
     <tr><th>ID</th><th>Name</th><th>Email</th><th>Role</th><th>Jobs</th><th>Marketplace status</th><th>Listing review</th><th>Actions</th></tr>
     <?php while ($usr = $res->fetch_assoc()): ?>
       <tr>
-        <td>#<?= $usr['id'] ?></td>
+        <td class="user-id">#<?= (int)$usr['id'] ?></td>
         <td><b><?= e($usr['name']) ?></b><?= $usr['id'] == $u['id'] ? ' <span class="muted">(you)</span>' : '' ?></td>
-        <td><?= e($usr['email']) ?></td>
+        <td class="user-email"><?= e($usr['email']) ?></td>
         <td><span class="badge <?= $usr['role']==='admin' ? 'err' : ($usr['role']==='worker' ? 'info' : 'ok') ?>"><?= e($usr['role']) ?></span></td>
         <td><?= (int)$usr['jobs'] ?></td>
         <td><?php if ($usr['role'] === 'worker'): $isOnline = !empty($usr['worker_last_seen']) && strtotime($usr['worker_last_seen']) >= time()-300; $isBusy = (int)$usr['active_worker_jobs'] > 0; ?><span class="availability-pill <?= $isBusy ? 'busy' : 'available' ?>"><i></i><?= $isBusy ? 'Busy' : 'Available' ?></span><small class="admin-worker-presence <?= $isOnline ? 'is-online' : '' ?>"><?= $isOnline ? 'Recently active' : 'Offline' ?></small><?php else: ?><span class="muted">—</span><?php endif; ?></td>
@@ -222,6 +222,7 @@ $badges = $conn->query("SELECT bg.*, u.name worker FROM badges bg JOIN users u O
     <?php endwhile; ?>
   </table>
   </div>
+  <p class="table-scroll-hint">Scroll the table sideways to reach the listing review and account actions.</p>
   <p class="muted" style="margin-top:10px;">Marketplace approval is an internal profile/listing review only. It does not mean identity or background checks have been completed.</p>
 </div>
 
