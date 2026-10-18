@@ -23,7 +23,7 @@ function ch_initials(string $name): string
 function ch_workers($conn): array
 {
     $res = $conn->query(
-        "SELECT u.id, u.name, u.bio, u.avatar, u.address,
+        "SELECT u.id, u.name, u.bio, u.avatar, u.address, u.city,
                 (SELECT COUNT(*) FROM bookings b
                   WHERE b.worker_id = u.id AND b.status = 'completed') AS jobs,
                 (SELECT COUNT(*) FROM feedback f

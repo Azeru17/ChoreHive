@@ -57,8 +57,8 @@ require 'layout.php';
       <?= csrf_field() ?>
       <input type="hidden" name="token" value="<?= e($token) ?>">
       <input type="hidden" name="email" value="<?= e($email) ?>">
-      <label>New password (min 8 characters)</label><input type="password" name="password" minlength="8" required>
-      <label>Confirm new password</label><input type="password" name="confirm" minlength="8" required>
+      <label for="resetNewPassword">New password (min 8 characters)</label><div class="password-field"><input id="resetNewPassword" type="password" name="password" minlength="8" autocomplete="new-password" required><button class="password-toggle" type="button" data-password-toggle="resetNewPassword" aria-label="Show password" aria-pressed="false"><i class="bi bi-eye" aria-hidden="true"></i><span>Show</span></button></div>
+      <label for="resetConfirmPassword">Confirm new password</label><div class="password-field"><input id="resetConfirmPassword" type="password" name="confirm" minlength="8" autocomplete="new-password" required><button class="password-toggle" type="button" data-password-toggle="resetConfirmPassword" aria-label="Show password" aria-pressed="false"><i class="bi bi-eye" aria-hidden="true"></i><span>Show</span></button></div>
       <button>Update password</button>
     </form>
   <?php endif; ?>

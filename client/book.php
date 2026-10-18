@@ -2,9 +2,37 @@
 require '../config.php';
 $u = require_role('client');
 
-$selected_worker_id = filter_input(INPUT_GET, 'worker_id', FILTER_VALIDATE_INT) ?: 0;
+$edit_id = filter_input(INPUT_GET, 'edit', FILTER_VALIDATE_INT);
+$edit_id = $edit_id !== false && $edit_id !== null && $edit_id > 0 ? $edit_id : 0;
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && array_key_exists('edit_booking_id', $_POST)) {
+    $postedEditId = filter_var($_POST['edit_booking_id'], FILTER_VALIDATE_INT);
+    if ($postedEditId === false || $postedEditId < 1) fail('The booking to edit is invalid.');
+    $edit_id = $postedEditId;
+}
+$edit_booking = null;
+$editTasks = [];
+if ($edit_id > 0) {
+    $editStmt = $conn->prepare("SELECT b.*,s.name service,(SELECT w.name FROM users w WHERE w.id=b.worker_id) worker_name FROM bookings b JOIN services s ON s.id=b.service_id WHERE b.id=? AND b.client_id=?");
+    $editStmt->bind_param('ii', $edit_id, $u['id']);
+    $editStmt->execute();
+    $edit_booking = $editStmt->get_result()->fetch_assoc();
+    if (!$edit_booking || !in_array($edit_booking['status'], ['pending','assigned'], true) || $edit_booking['payment_status'] !== 'unpaid') {
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            fail('This booking can no longer be edited. Review its current status from My Bookings.');
+        }
+        flash('This booking can no longer be edited. Review its current status from My Bookings.', 'error');
+        header('Location: bookings.php');
+        exit;
+    }
+    $taskStmt = $conn->prepare('SELECT task FROM checklist_items WHERE booking_id=? ORDER BY id');
+    $taskStmt->bind_param('i', $edit_id);
+    $taskStmt->execute();
+    $taskResult = $taskStmt->get_result();
+    while ($taskRow = $taskResult->fetch_assoc()) $editTasks[] = $taskRow['task'];
+}
+$selected_worker_id = $edit_id ? 0 : (filter_input(INPUT_GET, 'worker_id', FILTER_VALIDATE_INT) ?: 0);
 if ($selected_worker_id > 0) {
-    $check = $conn->prepare("SELECT id,name,bio,avatar FROM users WHERE id=? AND role='worker' AND worker_approved=1");
+    $check = $conn->prepare("SELECT id,name,bio,avatar,city FROM users WHERE id=? AND role='worker' AND worker_approved=1");
     $check->bind_param('i', $selected_worker_id);
     $check->execute();
     $selected_worker = $check->get_result()->fetch_assoc();
@@ -18,7 +46,6 @@ if ($selected_worker_id > 0) {
 }
 
 $services = $conn->query("SELECT id,name,description,base_price,duration_hours FROM services ORDER BY base_price ASC");
-$workers = $conn->query("SELECT u.id,u.name,(SELECT COUNT(*) FROM bookings bx WHERE bx.worker_id=u.id AND bx.status IN ('assigned','in_progress','awaiting_verification')) active_jobs FROM users u WHERE u.role='worker' AND u.worker_approved=1 ORDER BY u.name");
 
 // Saved addresses for the address-book dropdown
 $savedAddresses = [];
@@ -30,6 +57,8 @@ $savedAddresses = [];
     while ($r = $res->fetch_assoc()) $savedAddresses[] = $r;
 }
 $selected_worker_busy = false;
+$selected_worker_city = $selected_worker ? trim((string)($selected_worker['city'] ?? '')) : '';
+$selected_worker_near = $selected_worker ? same_city($u['city'] ?? '', $selected_worker['city'] ?? '') : false;
 if ($selected_worker_id) {
     $busyStmt = $conn->prepare("SELECT COUNT(*) c FROM bookings WHERE worker_id=? AND status IN ('assigned','in_progress','awaiting_verification')");
     $busyStmt->bind_param('i', $selected_worker_id);
@@ -44,8 +73,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Do not trust a modified hidden field or a different worker_id in the request.
     if ($selected_worker_id > 0) {
         $worker_id = $selected_worker_id;
+    } elseif ($edit_id) {
+        // Editing a booking keeps the cleaner already attached to it.
+        $worker_id = $edit_booking['worker_id'] !== null ? (int)$edit_booking['worker_id'] : null;
     } else {
-        $worker_id = ($_POST['worker_id'] ?? '') !== '' ? v_int('worker_id', 1, PHP_INT_MAX, 'Worker') : null;
+        // New bookings must start from a cleaner profile; enforced before the form renders.
+        $worker_id = null;
     }
     $schedule = v_datetime();
     $address = v_str('address', 255, true, 'Service address');
@@ -85,8 +118,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $check->bind_param('i', $worker_id);
         $check->execute();
         if (!$check->get_result()->fetch_assoc()) fail('Selected worker does not exist.');
-        $busyStmt = $conn->prepare("SELECT COUNT(*) c FROM bookings WHERE worker_id=? AND status IN ('assigned','in_progress','awaiting_verification')");
-        $busyStmt->bind_param('i', $worker_id);
+        $busyStmt = $conn->prepare("SELECT COUNT(*) c FROM bookings WHERE worker_id=? AND status IN ('assigned','in_progress','awaiting_verification')" . ($edit_id ? " AND id<>?" : ''));
+        if ($edit_id) $busyStmt->bind_param('ii', $worker_id, $edit_id);
+        else $busyStmt->bind_param('i', $worker_id);
         $busyStmt->execute();
         if ((int)$busyStmt->get_result()->fetch_assoc()['c'] > 0) {
             fail('That cleaner has just become unavailable. Please choose another cleaner and try again.');
@@ -99,10 +133,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $lngDb = $address_lng;
     $conn->begin_transaction();
     try {
-        $stmt = $conn->prepare("INSERT INTO bookings (client_id,worker_id,service_id,schedule,address,notes,status,total_price,payment_method,address_lat,address_lng) VALUES (?,?,?,?,?,?,?,?,?,?,?)");
-        $stmt->bind_param('iiissssdsss', $u['id'], $worker_id, $service_id, $schedule, $address, $notes, $status, $total, $payment_method, $latDb, $lngDb);
-        $stmt->execute();
-        $bid = (int)$conn->insert_id;
+        if ($edit_id) {
+            $lock = $conn->prepare("SELECT worker_id,status,payment_status FROM bookings WHERE id=? AND client_id=? FOR UPDATE");
+            $lock->bind_param('ii', $edit_id, $u['id']);
+            $lock->execute();
+            $lockedBooking = $lock->get_result()->fetch_assoc();
+            if (!$lockedBooking || !in_array($lockedBooking['status'], ['pending','assigned'], true) || $lockedBooking['payment_status'] !== 'unpaid') {
+                throw new RuntimeException('This booking can no longer be edited.');
+            }
+            $oldWorkerId = $lockedBooking['worker_id'] === null ? null : (int)$lockedBooking['worker_id'];
+            $stmt = $conn->prepare("UPDATE bookings SET worker_id=?,service_id=?,schedule=?,address=?,notes=?,status=?,total_price=?,payment_method=?,address_lat=?,address_lng=?,paymongo_checkout_id=NULL WHERE id=? AND client_id=?");
+            $stmt->bind_param('iissssdsssii', $worker_id, $service_id, $schedule, $address, $notes, $status, $total, $payment_method, $latDb, $lngDb, $edit_id, $u['id']);
+            $stmt->execute();
+            $bid = $edit_id;
+            $removeTasks = $conn->prepare('DELETE FROM checklist_items WHERE booking_id=?');
+            $removeTasks->bind_param('i', $bid);
+            $removeTasks->execute();
+        } else {
+            $oldWorkerId = null;
+            $stmt = $conn->prepare("INSERT INTO bookings (client_id,worker_id,service_id,schedule,address,notes,status,total_price,payment_method,address_lat,address_lng) VALUES (?,?,?,?,?,?,?,?,?,?,?)");
+            $stmt->bind_param('iiissssdsss', $u['id'], $worker_id, $service_id, $schedule, $address, $notes, $status, $total, $payment_method, $latDb, $lngDb);
+            $stmt->execute();
+            $bid = (int)$conn->insert_id;
+        }
         $ci = $conn->prepare('INSERT INTO checklist_items (booking_id,task) VALUES (?,?)');
         foreach ($tasks as $task) {
             $ci->bind_param('is', $bid, $task);
@@ -111,9 +164,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $conn->commit();
     } catch (Throwable $ex) {
         $conn->rollback();
-        error_log('ChoreHive booking create failed: ' . $ex->getMessage());
+        error_log('ChoreHive booking save failed: ' . $ex->getMessage());
+        if ($ex instanceof RuntimeException && $ex->getMessage() === 'This booking can no longer be edited.') {
+            fail($ex->getMessage() . ' Review its current status from My Bookings.');
+        }
         fail('We could not save this booking. Please check your database migration and try again.');
     }
+    if ($edit_id) unset($_SESSION['payment_demo_checkout']);
 
     // Save to address book if requested
     if (!empty($_POST['save_address']) && !empty($_POST['address_label'])) {
@@ -127,40 +184,66 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     $serviceName = $svc['name'];
-    if ($worker_id && $payment_method === 'cash') {
-        notify_and_email($worker_id, "New booking #$bid: $serviceName on " . date('M j, g:i A', strtotime($schedule)) . '.', 'New booking assigned', 'worker/job.php?id=' . $bid);
-    } elseif ($worker_id) {
-        notify_and_email($worker_id, "Booking #$bid is reserved for you but waiting for the customer's GCash/Maya payment before you start work.", 'Booking awaiting payment', 'worker/job.php?id=' . $bid);
+    if ($edit_id && $oldWorkerId && $oldWorkerId !== $worker_id) {
+        notify_and_email($oldWorkerId, "Booking #$bid was updated and is no longer assigned to you.", 'Booking assignment updated', 'worker/jobs.php');
+    }
+    if ($worker_id && (!$edit_id || $oldWorkerId !== $worker_id || $edit_booking['payment_method'] !== $payment_method)) {
+        if ($payment_method === 'cash') {
+            notify_and_email($worker_id, "Booking #$bid: $serviceName on " . date('M j, g:i A', strtotime($schedule)) . '. Cash is due after the job.', $edit_id ? 'Booking updated' : 'New booking assigned', 'worker/job.php?id=' . $bid);
+        } else {
+            notify_and_email($worker_id, "Booking #$bid is reserved for you but waiting for the customer's GCash/Maya payment before you start work.", $edit_id ? 'Booking updated' : 'Booking awaiting payment', 'worker/job.php?id=' . $bid);
+        }
     }
     $methodLabel = ['cash' => 'cash after the job', 'gcash' => 'GCash (PayMongo)', 'maya' => 'Maya (PayMongo)'][$payment_method];
-    notify_and_email($u['id'], "Booking #$bid created: $serviceName on " . date('M j, g:i A', strtotime($schedule)) . '. Payment method: ' . $methodLabel . '.', 'Booking created', 'client/booking.php?id=' . $bid);
-    audit_log('booking_created', "Booking #$bid created by client {$u['name']} (service $service_id; payment $payment_method; " . ($worker_id ? "customer selected worker #$worker_id" : 'worker not yet selected') . ')');
+    notify_and_email($u['id'], "Booking #$bid " . ($edit_id ? 'updated' : 'created') . ": $serviceName on " . date('M j, g:i A', strtotime($schedule)) . '. Payment method: ' . $methodLabel . '.', $edit_id ? 'Booking updated' : 'Booking created', 'client/booking.php?id=' . $bid);
+    audit_log($edit_id ? 'booking_updated' : 'booking_created', "Booking #$bid " . ($edit_id ? 'updated' : 'created') . " by client {$u['name']} (service $service_id; payment $payment_method; " . ($worker_id ? "worker #$worker_id" : 'worker not yet selected') . ')');
     if ($payment_method !== 'cash') {
         flash('Booking details saved. Complete GCash or Maya checkout before the worker can start.');
         header('Location: pay.php?id=' . $bid);
     } else {
-        flash('Your cleaning booking has been created. Cash is due after the work is completed.');
+        flash($edit_id ? 'Your booking has been updated. Cash is due after the work is completed.' : 'Your cleaning booking has been created. Cash is due after the work is completed.');
         header('Location: booking.php?id=' . $bid);
     }
     exit;
 }
 
-$title = $selected_worker_id ? 'Hire Your Cleaner' : 'Book a Service';
-$enableMapAssets = true;
+$showBookingForm = $edit_id > 0 || $selected_worker_id > 0;
+$title = $edit_id ? 'Edit Booking' : ($selected_worker_id ? 'Hire Your Cleaner' : 'Book a Service');
+$enableMapAssets = $showBookingForm;
 require '../layout.php';
+if (!$showBookingForm) {
+    ?>
+    <div class="page-intro booking-intro">
+      <span class="eyebrow">ONE QUICK STEP FIRST</span>
+      <h1>Choose your cleaner first<span class="heading-period">.</span></h1>
+      <p>Every ChoreHive booking starts from a cleaner&rsquo;s profile so you always know who is coming to your home.</p>
+    </div>
+    <div class="card book-first-notice">
+      <span class="book-first-icon"><i class="bi bi-person-check-fill"></i></span>
+      <h2>Pick a cleaner to unlock the booking form</h2>
+      <p>Go to <b>Find a Cleaner</b>, review ratings and experience, then tap <b>Hire this cleaner</b> on the profile you like. You&rsquo;ll land on the booking form with that cleaner already selected.</p>
+      <div class="book-first-actions">
+        <a class="btn" href="workers.php"><i class="bi bi-people-fill"></i> Click here to find a cleaner</a>
+        <a class="btn btn-outline" href="bookings.php">View my bookings</a>
+      </div>
+    </div>
+    <?php
+    require '../footer.php';
+    exit;
+}
 $workerAvatar = $selected_worker ? avatar_url($selected_worker, ch_base()) : '';
 ?>
 <div class="page-intro booking-intro">
   <span class="eyebrow">YOUR HOME, YOUR CHOICE</span>
-  <h1><?= $selected_worker_id ? 'Let’s make it official' : 'Plan your clean' ?><span class="heading-period">.</span></h1>
-  <p><?= $selected_worker_id ? 'You found your cleaner. Add the job details below and ChoreHive will take care of the next steps.' : 'Choose your service and schedule, then tell your cleaner what matters most.' ?></p>
+  <h1><?= $edit_id ? 'Update your booking' : ($selected_worker_id ? 'Let’s make it official' : 'Plan your clean') ?><span class="heading-period">.</span></h1>
+  <p><?= $edit_id ? 'Review your booking details and change anything before continuing.' : ($selected_worker_id ? 'You found your cleaner. Add the job details below and ChoreHive will take care of the next steps.' : 'Choose your service and schedule, then tell your cleaner what matters most.') ?></p>
 </div>
 <?php if ($selected_worker): ?>
   <div class="hire-selected-banner hire-selected-banner-large">
     <span>✓</span>
     <div class="hire-selected-person">
       <?php if ($workerAvatar): ?><img src="<?= e($workerAvatar) ?>" alt="" class="booking-worker-avatar"><?php else: ?><span class="booking-worker-avatar booking-worker-initials"><?= e(initials($selected_worker['name'])) ?></span><?php endif; ?>
-      <div><b>You’re hiring <?= e($selected_worker['name']) ?></b><small><?= $selected_worker_busy ? 'This cleaner currently has an active job. You can still complete the form, but availability will be checked again before saving.' : 'Your booking will be assigned to this cleaner.' ?></small></div>
+      <div><b>You’re hiring <?= e($selected_worker['name']) ?></b><small><?= $selected_worker_busy ? 'This cleaner currently has an active job. You can still complete the form, but availability will be checked again before saving.' : 'Your booking will be assigned to this cleaner.' ?><?= $selected_worker_city ? ' · 📍 ' . e($selected_worker_city) . ($selected_worker_near ? ' (near you)' : '') : '' ?></small></div>
     </div>
     <a href="workers.php">Change cleaner</a>
   </div>
@@ -169,6 +252,7 @@ $workerAvatar = $selected_worker ? avatar_url($selected_worker, ch_base()) : '';
   <main class="card booking-form-card">
     <form method="post" id="bookingForm">
       <?= csrf_field() ?>
+      <?php if ($edit_id): ?><input type="hidden" name="edit_booking_id" value="<?= (int)$edit_id ?>"><?php endif; ?>
       <?php if ($selected_worker_id): ?><input type="hidden" name="worker_id" value="<?= (int)$selected_worker_id ?>"><?php endif; ?>
       <section class="booking-form-section">
         <span class="booking-section-number">01</span>
@@ -176,21 +260,27 @@ $workerAvatar = $selected_worker ? avatar_url($selected_worker, ch_base()) : '';
         <label for="service_id">Cleaning service</label>
         <select name="service_id" id="service_id" required>
           <?php while ($s = $services->fetch_assoc()): ?>
-            <option value="<?= (int)$s['id'] ?>" data-price="<?= e((string)$s['base_price']) ?>" data-duration="<?= (int)$s['duration_hours'] ?>"><?= e($s['name']) ?> — ₱<?= number_format((float)$s['base_price'], 2) ?></option>
+            <option value="<?= (int)$s['id'] ?>" data-price="<?= e((string)$s['base_price']) ?>" data-duration="<?= (int)$s['duration_hours'] ?>" <?= (int)($_POST['service_id'] ?? $edit_booking['service_id'] ?? 0) === (int)$s['id'] ? 'selected' : '' ?>><?= e($s['name']) ?> — ₱<?= number_format((float)$s['base_price'], 2) ?></option>
           <?php endwhile; ?>
         </select>
-        <?php if (!$selected_worker_id): ?>
-          <label for="worker_id">Preferred cleaner <span class="muted">(optional)</span></label>
-          <select name="worker_id" id="worker_id"><option value="">No preference — admin assigns a cleaner</option><?php while ($w = $workers->fetch_assoc()): ?><option value="<?= (int)$w['id'] ?>" <?= (int)$w['active_jobs'] > 0 ? 'disabled' : '' ?>><?= e($w['name']) ?><?= (int)$w['active_jobs'] > 0 ? ' · Currently booked' : ' · Available' ?></option><?php endwhile; ?></select>
-          <p class="form-hint">Bookings without a preferred cleaner stay pending until an administrator assigns an available worker.</p>
-          <p class="form-hint">Want to choose your cleaner yourself? <a href="workers.php">Browse worker profiles first.</a></p>
+        <?php if (!$selected_worker_id && !empty($edit_booking['worker_id'])): ?>
+          <p class="form-hint">Assigned cleaner: <b><?= e($edit_booking['worker_name'] ?: 'your cleaner') ?></b>. Your booking stays with this cleaner when you save changes.</p>
+        <?php elseif (!$selected_worker_id && empty($edit_booking['worker_id'])): ?>
+          <p class="form-hint">This booking stays pending until an administrator assigns an available cleaner. Want to choose your cleaner yourself? <a href="workers.php">Browse worker profiles first.</a></p>
         <?php endif; ?>
       </section>
       <section class="booking-form-section">
         <span class="booking-section-number">02</span>
         <div class="booking-section-heading"><h2>Where and when?</h2><p>Give your cleaner the details they need to arrive prepared.</p></div>
         <label for="schedule">Preferred date and time</label>
-        <input type="datetime-local" name="schedule" id="schedule" required min="<?= min_datetime_attr() ?>">
+        <div class="schedule-picker">
+          <span class="schedule-picker-icon" aria-hidden="true"><i class="bi bi-calendar2-week"></i></span>
+          <div class="schedule-picker-content">
+            <small>CHOOSE A DATE &amp; TIME</small>
+            <input type="datetime-local" name="schedule" id="schedule" required min="<?= min_datetime_attr() ?>" value="<?= e($_POST['schedule'] ?? ($edit_booking ? date('Y-m-d\TH:i', strtotime($edit_booking['schedule'])) : '')) ?>">
+            <span id="schedulePreview" class="schedule-picker-preview" aria-live="polite">Choose a date and time for your cleaning</span>
+          </div>
+        </div>
         <p class="form-hint">Bookings can only be scheduled for today or a future date.</p>
         <?php if ($savedAddresses): ?>
           <label for="saved_address">Use a saved address</label>
@@ -202,17 +292,17 @@ $workerAvatar = $selected_worker ? avatar_url($selected_worker, ch_base()) : '';
           </select>
         <?php endif; ?>
         <label for="address">Cleaning address <span class="muted">(required; enter this manually)</span></label>
-        <input name="address" id="address" maxlength="255" required autocomplete="street-address" value="<?= e($_POST['address'] ?? $u['address'] ?? '') ?>" placeholder="House number, street, barangay, city">
+        <input name="address" id="address" maxlength="255" required autocomplete="street-address" value="<?= e($_POST['address'] ?? $edit_booking['address'] ?? $u['address'] ?? '') ?>" placeholder="House number, street, barangay, city">
         <div class="map-picker-card">
           <div class="map-picker-heading"><div><b>Pin the exact location</b><p>Tap the map or drag the pin. Your typed address will not be overwritten.</p></div><button type="button" class="btn btn-outline btn-sm" id="useCurrentLocation">Use my location</button></div>
           <div id="addressMap" class="address-map" role="application" aria-label="Map to pin cleaning location"></div>
           <div class="map-picker-footer"><span id="mapPinStatus" role="status" aria-live="polite">No map pin selected. The manual address will still be saved.</span><button type="button" class="map-clear-button" id="clearMapPin">Clear pin</button></div>
           <small class="map-privacy-note">Map tiles provided by OpenStreetMap contributors. The pin coordinates are shared with the assigned worker to help them find the address. Manual address entry remains the source of truth. <a href="https://www.openstreetmap.org/fixthemap" target="_blank" rel="noopener">Report a map issue</a>.</small>
-          <input type="hidden" name="address_lat" id="address_lat" value="<?= e($_POST['address_lat'] ?? '') ?>">
-          <input type="hidden" name="address_lng" id="address_lng" value="<?= e($_POST['address_lng'] ?? '') ?>">
+          <input type="hidden" name="address_lat" id="address_lat" value="<?= e($_POST['address_lat'] ?? $edit_booking['address_lat'] ?? '') ?>">
+          <input type="hidden" name="address_lng" id="address_lng" value="<?= e($_POST['address_lng'] ?? $edit_booking['address_lng'] ?? '') ?>">
         </div>
         <label for="notes">Additional instructions <span class="muted">(optional)</span></label>
-        <textarea name="notes" id="notes" rows="3" maxlength="1000" placeholder="Gate instructions, pets at home, supplies available…"><?= e($_POST['notes'] ?? '') ?></textarea>
+        <textarea name="notes" id="notes" rows="3" maxlength="1000" placeholder="Gate instructions, pets at home, supplies available…"><?= e($_POST['notes'] ?? $edit_booking['notes'] ?? '') ?></textarea>
         <div class="save-address-row" style="margin-top:14px;padding:12px 14px;background:#f5f8ff;border:1px solid #e3e9f2;border-radius:10px;">
           <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;font-weight:600;">
             <input type="checkbox" name="save_address" value="1" id="save_address" style="margin-top:3px;" <?= !empty($_POST['save_address']) ? 'checked' : '' ?>>
@@ -227,7 +317,7 @@ $workerAvatar = $selected_worker ? avatar_url($selected_worker, ch_base()) : '';
         <span class="booking-section-number">03</span>
         <div class="booking-section-heading"><h2>Your cleaning checklist</h2><p>List the tasks you want completed. You can add up to 20.</p></div>
         <div id="taskFields" class="booking-task-fields">
-          <?php $postedTasks = array_slice((array)($_POST['tasks'] ?? ['', '', '']), 0, 20); if (!$postedTasks) $postedTasks = ['', '', '']; foreach ($postedTasks as $i => $task): ?>
+          <?php $postedTasks = array_slice((array)($_POST['tasks'] ?? ($editTasks ?: ['', '', ''])), 0, 20); if (!$postedTasks) $postedTasks = ['', '', '']; foreach ($postedTasks as $i => $task): ?>
             <div class="booking-task-row"><span class="booking-task-check">✓</span><input name="tasks[]" maxlength="255" value="<?= e($task) ?>" placeholder="<?= ['e.g. Clean kitchen sink','e.g. Mop bedroom floor','e.g. Wipe living room surfaces'][$i] ?? 'Add a cleaning task' ?>"><button type="button" class="booking-remove-task" aria-label="Remove task" title="Remove task">×</button></div>
           <?php endforeach; ?>
         </div>
@@ -237,22 +327,40 @@ $workerAvatar = $selected_worker ? avatar_url($selected_worker, ch_base()) : '';
         <span class="booking-section-number">04</span>
         <div class="booking-section-heading"><h2>How would you like to pay?</h2><p>Cash is confirmed after the job. GCash or Maya must be completed through PayMongo before work starts.</p></div>
         <div class="payment-choice-grid">
-          <label class="payment-choice"><input type="radio" name="payment_method" value="cash" <?= (($_POST['payment_method'] ?? 'cash') === 'cash') ? 'checked' : '' ?>><span class="payment-choice-copy"><b>Cash after cleaning</b><small>Pay the worker physically after the job is complete and you've reviewed it.</small></span><span class="payment-choice-tag">Pay later</span></label>
-          <label class="payment-choice"><input type="radio" name="payment_method" value="gcash" <?= (($_POST['payment_method'] ?? '') === 'gcash') ? 'checked' : '' ?>><span class="payment-choice-copy"><b>GCash</b><small>Pay securely via PayMongo before the worker starts.</small></span><span class="payment-choice-tag online">Pay first</span></label>
-          <label class="payment-choice"><input type="radio" name="payment_method" value="maya" <?= (($_POST['payment_method'] ?? '') === 'maya') ? 'checked' : '' ?>><span class="payment-choice-copy"><b>Maya</b><small>Pay securely via PayMongo before the worker starts.</small></span><span class="payment-choice-tag online">Pay first</span></label>
+          <label class="payment-choice"><input type="radio" name="payment_method" value="cash" <?= (($_POST['payment_method'] ?? $edit_booking['payment_method'] ?? 'cash') === 'cash') ? 'checked' : '' ?>><span class="payment-choice-copy"><b>Cash after cleaning</b><small>Pay the worker physically after the job is complete and you've reviewed it.</small></span><span class="payment-choice-tag">Pay later</span></label>
+          <label class="payment-choice"><input type="radio" name="payment_method" value="gcash" <?= (($_POST['payment_method'] ?? $edit_booking['payment_method'] ?? '') === 'gcash') ? 'checked' : '' ?>><span class="payment-choice-copy"><b>GCash</b><small>Pay securely via PayMongo before the worker starts.</small></span><span class="payment-choice-tag online">Pay first</span></label>
+          <label class="payment-choice"><input type="radio" name="payment_method" value="maya" <?= (($_POST['payment_method'] ?? $edit_booking['payment_method'] ?? '') === 'maya') ? 'checked' : '' ?>><span class="payment-choice-copy"><b>Maya</b><small>Pay securely via PayMongo before the worker starts.</small></span><span class="payment-choice-tag online">Pay first</span></label>
         </div>
         <p class="payment-demo-note"><b>Online payments</b> are processed by PayMongo. You will complete checkout on GCash or Maya. The worker cannot start until payment is confirmed.</p>
       </section>
-      <div class="booking-submit-row"><div><b id="paymentSummaryTitle">Cash after the job</b><small id="paymentSummaryHint">Pay the worker after the job is complete and you have reviewed it.</small></div><button type="submit" class="btn booking-submit-button">Continue <span>→</span></button></div>
+      <div class="booking-submit-row"><div><b id="paymentSummaryTitle">Cash after the job</b><small id="paymentSummaryHint">Pay the worker after the job is complete and you have reviewed it.</small></div><button type="submit" class="btn booking-submit-button"><?= $edit_id ? 'Save changes' : 'Continue' ?> <span>→</span></button></div>
     </form>
   </main>
   <aside class="booking-summary-column">
     <div class="card booking-summary-card"><span class="eyebrow">BOOKING SUMMARY</span><h2>Your cleaning plan</h2><div class="booking-summary-line"><span>Service</span><b id="summaryService">Choose a service</b></div><div class="booking-summary-line"><span>Estimated duration</span><b id="summaryDuration">—</b></div><div class="booking-summary-total"><span>Service price</span><strong id="summaryPrice">₱0.00</strong></div><p class="form-hint">Final price is based on the selected service. Any changes should be confirmed before the job begins.</p></div>
-    <div class="card booking-reassurance"><span class="reassurance-icon">✦</span><h3>Cleaning with confidence</h3><p>Your booking includes a task checklist and before-and-after photo verification. Choose cash after completion, or GCash/Maya through PayMongo before work starts.</p></div>
   </aside>
 </div>
 <script>
 (()=>{
+  const scheduleInput = document.getElementById('schedule');
+  const schedulePreview = document.getElementById('schedulePreview');
+  const updateSchedulePreview = () => {
+    if (!scheduleInput || !schedulePreview) return;
+    if (!scheduleInput.value) {
+      schedulePreview.textContent = 'Choose a date and time for your cleaning';
+      return;
+    }
+    const date = new Date(scheduleInput.value);
+    schedulePreview.textContent = Number.isNaN(date.getTime())
+      ? 'Choose a date and time for your cleaning'
+      : new Intl.DateTimeFormat(undefined, { dateStyle: 'full', timeStyle: 'short' }).format(date);
+  };
+  if (scheduleInput) {
+    scheduleInput.addEventListener('input', updateSchedulePreview);
+    scheduleInput.addEventListener('change', updateSchedulePreview);
+    updateSchedulePreview();
+  }
+
   const form=document.getElementById('bookingForm');if(!form)return;
   const service=document.getElementById('service_id'),price=document.getElementById('summaryPrice'),duration=document.getElementById('summaryDuration'),summary=document.getElementById('summaryService'),tasks=document.getElementById('taskFields'),add=document.getElementById('addTask');
   const paymentTitle=document.getElementById('paymentSummaryTitle'),paymentHint=document.getElementById('paymentSummaryHint');

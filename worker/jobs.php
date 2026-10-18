@@ -102,7 +102,7 @@ $finished = (int)$conn->query("SELECT COUNT(*) c FROM bookings
   <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px;">
     <h2 style="margin-bottom:0;">Work list</h2>
     <?php if ((int)$finished > 0): ?>
-      <form method="post" onsubmit="return confirm('Clear all $finished finished job(s)?\n\nTheir checklists, photos and client feedback will be permanently deleted.');">
+      <form method="post" data-confirm="Clear all $finished finished job(s)?\n\nTheir checklists, photos and client feedback will be permanently deleted." data-confirm-title="Clear finished jobs" data-confirm-yes="Yes, clear all">
         <?= csrf_field() ?>
         <button class="btn btn-sm btn-outline" name="clear_history" value="1">🧹 Clear history (<?= (int)$finished ?>)</button>
       </form>
@@ -120,12 +120,12 @@ $finished = (int)$conn->query("SELECT COUNT(*) c FROM bookings
       <td><?= date('M j, Y g:i A', strtotime($b['schedule'])) ?></td>
       <td><?= e($b['address']) ?></td>
       <td><span class="badge <?= status_class($b['status']) ?>"><?= str_replace('_',' ',$b['status']) ?></span></td>
-      <td>
+      <td><div class="worker-job-actions">
         <a class="btn btn-sm btn-sec" href="job.php?id=<?= $b['id'] ?>">Open</a>
         <?php if ($b['status'] === 'assigned'): ?>
-          <?php if (in_array($b['payment_method'], ['gcash','maya'], true) && !in_array($b['payment_status'], ['paid','demo_paid'], true)): ?><span class="payment-waiting-pill" title="Waiting for customer prepayment">Waiting for payment</span><?php else: ?><form method="post" style="display:inline"><?= csrf_field() ?><button class="btn btn-sm" name="start" value="<?= $b['id'] ?>">Confirm Job</button></form><?php endif; ?>
-          <?php if ($b['payment_method'] !== 'cash'): ?><span class="payment-waiting-pill" title="Online bookings must be handled by an administrator">Contact admin to reassign</span><?php else: ?>
-          <form method="post" style="display:inline" class="declineForm" onsubmit="return confirm('Reject this job?\n\nIt will be unassigned and the client will be notified so they can pick someone else.');"><?= csrf_field() ?>
+          <?php if (in_array($b['payment_method'], ['gcash','maya'], true) && !in_array($b['payment_status'], ['paid','demo_paid'], true)): ?><span class="payment-waiting-pill" title="Waiting for customer prepayment">Waiting for payment</span><?php else: ?><form method="post" style="display:inline" data-confirm="Start booking #<?= (int)$b['id'] ?> now? This changes the booking to In progress and notifies the customer. It does not mark the job complete." data-confirm-title="Start job"><?= csrf_field() ?><button class="btn btn-sm" name="start" value="<?= $b['id'] ?>">Confirm Job</button></form><?php endif; ?>
+          <?php if ($b['payment_method'] !== 'cash'): ?><span class="payment-waiting-pill" title="Online payments cannot currently be refunded automatically or declined from the worker page. Contact an administrator for reassignment and refund assistance.">Contact admin: reassignment / refund</span><?php else: ?>
+          <form method="post" style="display:inline" class="declineForm" data-confirm="Reject this job?\n\nIt will be unassigned and the client will be notified so they can pick someone else." data-confirm-title="Reject job" data-confirm-yes="Yes, reject"><?= csrf_field() ?>
             <input type="hidden" name="decline" value="<?= $b['id'] ?>">
             <button type="button" class="btn btn-sm btn-outline declineToggle" title="Reject this job">Reject</button>
             <span class="declineReason" style="display:none;">
@@ -144,15 +144,15 @@ $finished = (int)$conn->query("SELECT COUNT(*) c FROM bookings
           <?php endif; ?>
         <?php elseif ($b['status'] === 'in_progress'): ?>
           <?php if ((int)$b['client_started_ack'] === 1): ?>
-            <form method="post" style="display:inline" onsubmit="return confirm('Mark this job as done? The client will be notified to review it.')"><?= csrf_field() ?><button class="btn btn-sm" name="finish" value="<?= $b['id'] ?>">Job Done</button></form>
+            <form method="post" style="display:inline" data-confirm="Mark booking #<?= (int)$b['id'] ?> as done? The customer will be asked to review the photos and confirm completion. For cash bookings, this does not record payment; the customer confirms cash separately." data-confirm-title="Mark job done"><?= csrf_field() ?><button class="btn btn-sm" name="finish" value="<?= $b['id'] ?>">Job Done</button></form>
           <?php else: ?>
             <span class="payment-waiting-pill" title="Waiting for the client to confirm the job started">Waiting for client</span>
           <?php endif; ?>
         <?php endif; ?>
         <?php if (booking_is_finished($b['status'])): ?>
-          <form method="post" style="display:inline" onsubmit="return confirm('Delete job #<?= $b['id'] ?> from your list?\n\nIts checklist, photos and the client’s feedback will be removed too.');"><?= csrf_field() ?><button class="icon-btn danger" name="delete_job" value="<?= $b['id'] ?>" title="Delete finished job" aria-label="Delete finished job">🗑</button></form>
+          <form method="post" style="display:inline" data-confirm="Delete job #<?= $b['id'] ?> from your list?\n\nIts checklist, photos and the client’s feedback will be removed too." data-confirm-title="Delete job" data-confirm-yes="Yes, delete"><?= csrf_field() ?><button class="icon-btn danger" name="delete_job" value="<?= $b['id'] ?>" title="Delete finished job" aria-label="Delete finished job">🗑</button></form>
         <?php endif; ?>
-      </td>
+      </div></td>
     </tr>
     <?php endwhile; ?>
   </table>

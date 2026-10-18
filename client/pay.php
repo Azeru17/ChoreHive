@@ -251,7 +251,7 @@ require '../layout.php';
         <div class="demo-wallet-row"><span>Booking</span><b>#<?= (int)$id ?> · <?= e($b['service']) ?></b></div>
         <div class="demo-wallet-row demo-wallet-amount"><span>Amount</span><b>₱<?= number_format((float)$b['total_price'], 2) ?></b></div>
         <div class="payment-demo-note"><b>Simulation only:</b> no real wallet balance is checked or charged. No password, PIN, or real OTP is requested.</div>
-        <form method="post" class="payment-submit-form" onsubmit="return confirm('Approve this simulated payment? No real funds will move.');">
+        <form method="post" class="payment-submit-form" data-confirm="Approve this simulated payment? No real funds will move." data-confirm-title="Approve payment" data-confirm-yes="Yes, approve">
           <?= csrf_field() ?><input type="hidden" name="demo_nonce" value="<?= e($demoCheckout['nonce']) ?>">
           <button class="btn payment-submit" type="submit" name="approve_demo_payment" value="1">Approve demo payment · ₱<?= number_format((float)$b['total_price'], 2) ?></button>
         </form>
@@ -283,7 +283,7 @@ require '../layout.php';
         <button class="btn payment-submit" type="submit" name="start_demo_payment" value="1">Continue to <?= e($provider) ?> demo checkout</button>
       </form>
     <?php endif; ?>
-    <a class="btn btn-sec payment-cancel" href="booking.php?id=<?= (int)$id ?>">Back to booking</a>
+    <a class="btn btn-sec payment-cancel" href="book.php?edit=<?= (int)$id ?>">Back to booking</a>
   </section>
 </div>
 <?php require '../footer.php'; ?>

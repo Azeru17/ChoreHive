@@ -36,6 +36,13 @@ input[type="file"]::file-selector-button {
   border: 0; border-radius: 8px; background: #edf2fa; color: var(--navy);
   padding: 8px 12px; margin-right: 10px; font-weight: 650; cursor: pointer;
 }
+.worker-photo-upload{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:end;gap:10px;margin:0}
+.worker-photo-file{min-width:0}
+.worker-photo-file label{display:block;margin:0 0 6px}
+.worker-photo-file input[type=file]{display:block;width:100%;min-width:0;min-height:48px}
+.worker-photo-upload>button{min-width:96px;min-height:48px;align-self:end}
+.booking-cancel-actions{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-top:10px}
+@media(max-width:560px){.worker-photo-upload{grid-template-columns:minmax(0,1fr)}.worker-photo-upload>button{width:100%}}
 .card, .stat, .worker-card, .price-card {
   box-shadow: var(--ui-shadow-soft);
 }
@@ -258,7 +265,7 @@ form button + button, form .btn + .btn { margin-inline-start: 4px; }
 .receipt-cta { margin: 0 0 26px; }
 
 /* Printable and PNG-exportable receipt */
-.receipt-actions { display: flex; justify-content: flex-end; gap: 9px; margin: 0 0 14px; }
+.receipt-actions { display: flex; justify-content: center; gap: 9px; margin: 0 0 14px; }
 .receipt-paper { max-width: 850px; margin: 0 auto 25px; padding: clamp(20px,4vw,42px); border: 1px solid #e1e9f0; border-radius: 20px; background: #fff; box-shadow: 0 15px 45px rgba(20,54,99,.08); color: #263d58; }
 .receipt-topline { display: flex; align-items: center; gap: 13px; padding-bottom: 22px; border-bottom: 1px solid #e9eef3; }
 .receipt-brand-mark { width: 47px; height: 47px; flex: 0 0 47px; display: grid; place-items: center; border-radius: 15px; background: #f0c459; color: #1b3556; font-weight: 900; }
@@ -357,8 +364,9 @@ body.adminpage .admin-assignment-form { flex-wrap: wrap; gap: 5px; align-items: 
 body.adminpage .admin-assignment-form select { flex: 1 1 120px; width: 100%; max-width: 100%; min-width: 0; box-sizing: border-box; }
 body.adminpage .admin-assignment-form .btn { padding: 6px 11px; font-size: .78rem; white-space: nowrap; }
 /* Keep long admin headings/actions from colliding at common laptop widths. */
-body.adminpage .container { min-width: 0; }
+body.adminpage .container { min-width: 0; width: auto; }
 body.adminpage .container h1 { max-width: 100%; }
+body.adminpage .flash { width: auto; }
 body.adminpage .container .card { min-width: 0; }
 body.adminpage .container .card > form { max-width: 100%; }
 body.adminpage .container .card form[style*="display:flex"] { flex-wrap: wrap; align-items: center; }
@@ -408,7 +416,7 @@ input:not([type="checkbox"]):not([type="radio"]), select, textarea {
   min-height: 44px;
 }
 input[type="checkbox"], input[type="radio"] { min-width: 18px; min-height: 18px; }
-button:not(.password-toggle):not(.notif-del):not(.icon-btn):not(.map-clear-button),
+button:not(.password-toggle):not(.notif-del):not(.icon-btn):not(.map-clear-button):not(.menu-btn):not(.burger):not(.site-burger),
 .btn, input[type="submit"], input[type="button"] {
   min-height: 44px;
   display: inline-flex;
@@ -473,11 +481,29 @@ button:not(.password-toggle):not(.notif-del):not(.icon-btn):not(.map-clear-butto
 
 @media (max-width: 560px) {
   body { font-size: 15px; }
-  body:not(.adminpage) header { gap: 5px; padding-inline: 12px; }
-  body:not(.adminpage) header .brand { font-size: 1.05rem; gap: 7px; }
-  body:not(.adminpage) header .brand img { width: 32px; height: 32px; }
-  body:not(.adminpage) header .userbox { margin-left: auto; font-size: .85rem; }
-  body:not(.adminpage) header .burger { margin-left: auto; }
+  body:not(.adminpage) header { gap: 6px 8px; padding-inline: 10px; flex-wrap: wrap; overflow-x: hidden; }
+  body:not(.adminpage) header .burger { margin-left: 0; flex-shrink: 0; }
+  /* Mobile userbox / profile header — bell, avatar and Logout share one visible row */
+  body:not(.adminpage) header .brand { font-size: 1rem; gap: 6px; min-width: 0; flex-shrink: 1; overflow: hidden; }
+  body:not(.adminpage) header .brand img { width: 28px; height: 28px; }
+  body:not(.adminpage) header .userbox { margin-left: auto; flex-shrink: 0; display: flex; align-items: center; gap: 8px; font-size: .8rem; }
+  body:not(.adminpage) header .userbox .notif-wrap { flex-shrink: 0; }
+  body:not(.adminpage) header .userbox .bell { font-size: 1rem; padding: 6px 8px; min-width: 34px; min-height: 34px; justify-content: center; flex-shrink: 0; }
+  body:not(.adminpage) header .userbox .who { display: inline-flex; align-items: center; gap: 0; min-width: 0; flex-shrink: 0; }
+  body:not(.adminpage) header .userbox .who .avatar { width: 30px; height: 30px; font-size: .72rem; flex-shrink: 0; }
+  body:not(.adminpage) header .userbox .who span:not(.avatar),
+  body:not(.adminpage) header .userbox .who i { display: none; }
+  body:not(.adminpage) header .userbox > a:last-child { min-width: 42px; padding: 6px 4px; text-align: center; white-space: nowrap; flex-shrink: 0; }
+  body:not(.adminpage) header .userbox > a:last-child i { margin-right: 0; }
+  body:not(.adminpage) header .userbox .notif-panel {
+    position: fixed;
+    left: 12px;
+    right: 12px;
+    top: 76px;
+    width: auto;
+    max-height: calc(100vh - 96px);
+    border-radius: var(--radius);
+  }
   body:not(.adminpage) .container { padding-inline: 12px; }
   .card { border-radius: 15px; }
   .market-hero { padding: 22px 18px; }
@@ -508,4 +534,483 @@ button:not(.password-toggle):not(.notif-del):not(.icon-btn):not(.map-clear-butto
   .market-stats, .dash-stats { grid-template-columns: minmax(0, 1fr); }
   .admin-top .menu-btn { font-size: .9rem; }
   .admin-top .admin-brand .console { display: none; }
+}
+
+.worker-job-actions { display: flex; min-width: 210px; align-items: center; flex-wrap: wrap; gap: 8px; }
+.worker-job-actions form { display: inline-flex !important; align-items: center; flex-wrap: wrap; gap: 6px; margin: 0; }
+.worker-job-actions .payment-waiting-pill { white-space: normal; }
+.password-field .password-toggle { z-index: 2; }
+.photo-grid img.lightbox-img:focus-visible { outline: 3px solid var(--honey); outline-offset: 3px; }
+
+.schedule-picker{display:flex;align-items:center;gap:13px;padding:14px 15px;border:1px solid #dce8df;border-radius:15px;background:linear-gradient(135deg,#f5fbf6,#fff);box-shadow:0 5px 16px rgba(33,103,62,.05)}
+.schedule-picker-icon{width:43px;height:43px;display:grid;place-items:center;flex-shrink:0;border-radius:13px;background:#e3f4e8;color:#247849;font-size:1.25rem}
+.schedule-picker-content{display:grid;gap:4px;min-width:0;flex:1}
+.schedule-picker-content>small{font-size:.62rem;font-weight:850;letter-spacing:.1em;color:#718579}
+.booking-form-section .schedule-picker input[type=datetime-local]{width:100%;min-width:0;padding:4px 0;border:0;background:transparent;box-shadow:none;color:#203b2b;font-size:.98rem;font-weight:750}
+.booking-form-section .schedule-picker input[type=datetime-local]:focus{outline:2px solid #27834f;outline-offset:3px;border-radius:3px}
+.schedule-picker-preview{font-size:.75rem;color:#748579;line-height:1.4}
+.chat-messages .message-row{position:relative}
+.message-delete{align-self:flex-end;margin:-3px 5px 2px;padding:2px 7px;border:0;border-radius:7px;background:transparent;color:#9a5960;font:inherit;font-size:.68rem;cursor:pointer}
+.message-delete:hover,.message-delete:focus-visible{background:#fff0ef;color:#a43339;text-decoration:underline}
+.message-deleted{color:#8490a0!important;font-style:italic}
+@media(max-width:520px){.schedule-picker{gap:10px;padding:12px}.schedule-picker-icon{width:37px;height:37px}.booking-form-section .schedule-picker input[type=datetime-local]{font-size:.85rem}}
+
+/* Worker profile: registered contact number shown in the description */
+.profile-contact {
+  display: inline-flex; align-items: baseline; gap: 6px; flex-wrap: wrap;
+  margin: 16px 0 0; padding: 9px 14px; border: 1px solid var(--line);
+  border-radius: 999px; background: var(--bg-subtle, #f8fafc); font-size: .92rem;
+}
+.profile-contact a { font-weight: 650; }
+.near-tag {
+  display: inline-flex; align-items: center;
+  padding: 2px 9px; border-radius: 999px;
+  background: #e7f7ed; color: #1d6b41; font-size: .74rem; font-weight: 800;
+}
+
+/* ---------- Location-aware marketplace & smart picks ---------- */
+.near-ribbon {
+  position: absolute; top: 12px; left: 14px; z-index: 2;
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 4px 10px; border-radius: 999px;
+  background: #e7f7ed; color: #1d6b41;
+  font-size: .7rem; font-weight: 800; letter-spacing: .01em;
+  box-shadow: 0 2px 8px rgba(20, 80, 45, .15);
+}
+.discover-city { color: #3d6a8f; font-weight: 600; }
+.location-banner {
+  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  padding: 14px 18px; margin: 4px 0 18px;
+  border: 1px solid #dbe6f4; border-radius: 16px;
+  background: linear-gradient(135deg, #f5f9ff, #fff);
+  box-shadow: 0 6px 18px rgba(23, 66, 122, .05);
+}
+.location-banner .location-pin { font-size: 1.5rem; line-height: 1; }
+.location-banner > div { flex: 1; min-width: 180px; }
+.location-banner b { display: block; color: #173d68; }
+.location-banner small { color: #6b7a90; }
+.location-banner-warn { border-color: #f0dcae; background: linear-gradient(135deg, #fffaef, #fff); }
+
+/* Smart picks showcased at the top of the client dashboard */
+.smart-location-note {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  margin: -4px 0 16px; color: #5a6a80; font-size: .9rem;
+}
+.smart-location-warn { color: #8a6d1f; }
+.smart-pick {
+  border-color: #f0dcae;
+  box-shadow: 0 10px 30px rgba(200, 150, 30, .12);
+}
+.smart-pick.is-near { border-color: #bfe3cf; }
+.smart-rank {
+  position: absolute; bottom: 12px; left: 14px; z-index: 2;
+  padding: 4px 11px; border-radius: 999px;
+  background: linear-gradient(180deg, #e7b23d, #e0aa33); color: #2a2110;
+  font-size: .68rem; font-weight: 850; letter-spacing: .02em;
+  box-shadow: 0 2px 8px rgba(224, 170, 51, .4);
+}
+.smart-why { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; }
+.smart-why span {
+  display: inline-flex; align-items: center;
+  padding: 3px 9px; border-radius: 999px;
+  background: #eef4fc; color: #2f5b86; font-size: .7rem; font-weight: 700;
+}
+
+/* Booking: "choose a cleaner first" notice shown when opening the booking form
+   without a cleaner selected (e.g. from the nav "Book a Service" link). */
+.book-first-notice {
+  max-width: 620px;
+  margin: 0 auto;
+  text-align: center;
+  padding: clamp(26px, 4vw, 40px);
+}
+.book-first-icon {
+  display: grid; place-items: center;
+  width: 74px; height: 74px; margin: 0 auto 16px;
+  border-radius: 22px;
+  background: radial-gradient(circle at 70% 25%, #fff 0, #fff4dc 42%, #ffe3a8 100%);
+  color: var(--honey-dark, #a9781a);
+  font-size: 2.1rem;
+  box-shadow: 0 10px 26px rgba(200, 150, 30, .18);
+}
+.book-first-notice h2 { margin: 0 0 10px; color: #183657; letter-spacing: -.03em; }
+.book-first-notice p { color: #69788e; line-height: 1.6; margin: 0 auto; max-width: 440px; }
+.book-first-actions {
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  margin-top: 22px;
+}
+.book-first-actions .btn { width: 100%; max-width: 320px; justify-content: center; }
+@media (min-width: 620px) {
+  .book-first-actions { flex-direction: row; justify-content: center; }
+}
+
+/* ---------- Admin dashboard: one consistent, aligned grid system ----------
+ * Every card shares the same rhythm and the same internal alignment so
+ * numbers, icons and captions line up across the whole dashboard. Scoped to
+ * the dashboard via .admin-dashboard / body.adminpage so other admin pages,
+ * the worker and client dashboards are untouched. */
+.admin-dashboard { display: flex; flex-direction: column; gap: 18px; }
+.admin-dashboard > * { margin-top: 0; margin-bottom: 0; }
+.admin-dashboard .dash-title {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 0;
+}
+.admin-dashboard .dash-title i { color: var(--honey-dark); font-size: 1.1em; }
+
+/* Stat cards: five even tracks, equal height, captions pinned to one baseline. */
+body.adminpage .dash-stats {
+  display: grid; grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 16px; align-items: stretch;
+}
+body.adminpage .dash-stats .stat { min-height: 132px; }
+body.adminpage .dash-stats .stat .top { align-items: center; }
+body.adminpage .dash-stats .stat h4 {
+  margin-top: 14px; min-height: 2.6em; display: flex; align-items: flex-end;
+  line-height: 1.3;
+}
+@media (max-width: 1000px) {
+  body.adminpage .dash-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  body.adminpage .dash-stats .stat:last-child:nth-child(odd) { grid-column: span 2; }
+}
+@media (max-width: 760px) {
+  body.adminpage .dash-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 460px) {
+  body.adminpage .dash-stats { grid-template-columns: minmax(0, 1fr); }
+  body.adminpage .dash-stats .stat:last-child:nth-child(odd) { grid-column: auto; }
+}
+
+/* Marketplace overview: evenly distributed cards, aligned value row + captions. */
+body.adminpage .market-admin-overview-grid {
+  display: grid; grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px; align-items: stretch;
+}
+body.adminpage .market-admin-overview-card {
+  display: flex; flex-direction: column; gap: 8px; min-width: 0;
+}
+.market-admin-overview-top {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+}
+body.adminpage .market-admin-overview-card > b { line-height: 1.3; min-height: 2.6em; }
+body.adminpage .market-admin-overview-card > small { line-height: 1.4; min-height: 2.8em; }
+@media (max-width: 1100px) {
+  body.adminpage .market-admin-overview-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  body.adminpage .market-admin-overview-grid .market-admin-overview-card:last-child:nth-child(odd) { grid-column: span 2; }
+}
+@media (max-width: 760px) {
+  body.adminpage .market-admin-overview-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 460px) {
+  body.adminpage .market-admin-overview-grid { grid-template-columns: minmax(0, 1fr); }
+  body.adminpage .market-admin-overview-grid .market-admin-overview-card:last-child:nth-child(odd) { grid-column: auto; }
+}
+
+/* Panels: charts + activity feed side by side, aligned at the top. */
+body.adminpage .dash-cols {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 28px; align-items: start;
+}
+body.adminpage .feed-row > div, body.adminpage .feed-body { min-width: 0; }
+body.adminpage .feed-text { overflow-wrap: anywhere; }
+body.adminpage .bar-row > span { min-width: 0; overflow-wrap: anywhere; }
+@media (max-width: 900px) {
+  body.adminpage .dash-cols { grid-template-columns: minmax(0, 1fr); gap: 20px; }
+}
+
+/* Needs attention */
+.needs-attention-card { border-color: #f0dcae; background: #fffdf8; }
+.dash-attention { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.dash-attention li {
+  display: flex; align-items: flex-start; gap: 9px; padding: 12px 14px;
+  border: 1px solid var(--line-2); border-radius: 12px; background: #fff;
+  font-size: .9rem; line-height: 1.5;
+}
+.dash-attention li::before {
+  content: ""; flex: 0 0 auto; width: 8px; height: 8px; margin-top: 7px;
+  border-radius: 50%; background: var(--warn); box-shadow: 0 0 0 3px var(--warn-bg);
+}
+
+/* Quick actions: a tidy grid; an odd trailing button stretches to fill its row. */
+body.adminpage .dash-actions {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px; align-items: stretch;
+}
+body.adminpage .dash-actions .btn { width: 100%; }
+body.adminpage .dash-actions .btn:last-child:nth-child(odd) { grid-column: span 2; }
+@media (min-width: 660px) {
+  body.adminpage .dash-actions { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (min-width: 1100px) {
+  body.adminpage .dash-actions { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  body.adminpage .dash-actions .btn:last-child:nth-child(odd) { grid-column: auto; }
+}
+@media (max-width: 380px) {
+  body.adminpage .dash-actions { grid-template-columns: minmax(0, 1fr); }
+  body.adminpage .dash-actions .btn:last-child:nth-child(odd) { grid-column: auto; }
+}
+
+/* Broadcast form: consistent field widths and spacing. */
+body.adminpage .broadcast-intro { margin-bottom: 14px; }
+body.adminpage .broadcast-form { max-width: 640px; }
+body.adminpage .broadcast-form select { max-width: 340px; }
+body.adminpage .broadcast-form textarea { min-height: 110px; }
+body.adminpage .broadcast-form .btn { margin-top: 12px; }
+
+/* Admin top bar: keep the bell, avatar and logout on one tidy row on phones. */
+@media (max-width: 1240px) {
+  body.adminpage .admin-top .menu-btn { display: inline-flex; align-items: center; gap: 7px; }
+}
+@media (max-width: 560px) {
+  .admin-top { gap: 8px; padding-inline: 12px; }
+  .admin-top .userbox { gap: 6px; margin-left: auto; }
+  .admin-top .userbox .who > span:not(.avatar) { display: none; }
+}
+
+/* ---------- Global confirmation dialog (Facebook-style) ---------- */
+.ch-confirm-overlay {
+  position: fixed; inset: 0; z-index: 2000;
+  display: flex; align-items: center; justify-content: center;
+  padding: 20px;
+  background: rgba(15, 29, 52, .55);
+  -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px);
+  opacity: 0; visibility: hidden;
+  transition: opacity .18s ease, visibility .18s ease;
+}
+.ch-confirm-overlay.open { opacity: 1; visibility: visible; }
+.ch-confirm-dialog {
+  width: min(100%, 420px);
+  background: #fff; border-radius: 18px;
+  padding: 26px 24px 20px;
+  box-shadow: 0 24px 60px rgba(10, 25, 50, .32);
+  text-align: center;
+  transform: translateY(12px) scale(.97);
+  transition: transform .2s cubic-bezier(.2, .8, .3, 1);
+}
+.ch-confirm-overlay.open .ch-confirm-dialog { transform: none; }
+.ch-confirm-icon {
+  display: grid; place-items: center;
+  width: 62px; height: 62px; margin: 0 auto 14px;
+  border-radius: 50%; background: #fff4dc; color: #c1861a; font-size: 1.9rem;
+}
+.ch-confirm-title { margin: 0 0 8px; color: #173d68; font-size: 1.2rem; letter-spacing: -.01em; }
+.ch-confirm-message {
+  margin: 0 0 20px; color: #5a6a80; line-height: 1.55;
+  white-space: pre-line; max-height: 44vh; overflow: auto; overflow-wrap: anywhere;
+}
+.ch-confirm-actions { display: flex; gap: 10px; }
+.ch-confirm-btn {
+  flex: 1; min-height: 44px; border-radius: 12px; border: 1px solid transparent;
+  font: inherit; font-weight: 750; cursor: pointer;
+  transition: transform .12s, box-shadow .18s, background .15s, filter .15s;
+}
+.ch-confirm-btn:active { transform: translateY(1px); }
+.ch-confirm-no { background: #eef2f8; color: #33445c; border-color: #dbe3ee; }
+.ch-confirm-no:hover { background: #e4eaf4; }
+.ch-confirm-yes { background: linear-gradient(180deg, #e7b23d, #e0aa33); color: #2a2110; box-shadow: 0 4px 12px rgba(224, 170, 51, .35); }
+.ch-confirm-yes:hover { filter: brightness(1.03); }
+.ch-confirm-yes.is-danger { background: linear-gradient(180deg, #e2574f, #d3403a); color: #fff; box-shadow: 0 4px 12px rgba(200, 60, 50, .32); }
+html.ch-confirm-open, html.ch-confirm-open body { overflow: hidden; }
+body.adminpage .ch-confirm-overlay { z-index: 3000; }
+
+/* ============================================================
+   Responsive header (mobile + tablet)
+   One consistent compact bar for client & worker roles:
+   brand � bell � avatar � Logout � hamburger. The nav opens as
+   a slide-down panel so it never clips or overflows.
+   ============================================================ */
+@media (max-width: 800px) {
+  body:not(.adminpage) header {
+    overflow: visible;
+    flex-wrap: wrap;
+    gap: 8px;
+    row-gap: 0;
+    padding: 7px 12px;
+    min-height: 58px;
+  }
+  body:not(.adminpage) header .brand { min-width: 0; flex: 0 1 auto; font-size: 1.05rem; gap: 8px; }
+  body:not(.adminpage) header .brand img { width: 30px; height: 30px; }
+
+  body:not(.adminpage) header .userbox {
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    width: auto;
+    font-size: .82rem;
+    flex-shrink: 0;
+  }
+  body:not(.adminpage) header .userbox .notif-wrap { display: inline-flex; width: auto; flex-shrink: 0; }
+  body:not(.adminpage) header .userbox .bell {
+    width: auto; min-width: 40px; min-height: 40px; padding: 0 10px; justify-content: center;
+    border-radius: 999px; flex-shrink: 0;
+  }
+  body:not(.adminpage) header .userbox .who { display: inline-flex; align-items: center; gap: 0; flex-shrink: 0; }
+  body:not(.adminpage) header .userbox .who .avatar { width: 32px; height: 32px; font-size: .74rem; }
+  body:not(.adminpage) header .userbox .who span:not(.avatar) { display: none; }
+  body:not(.adminpage) header .userbox > a:last-child {
+    padding: 7px 11px; border-radius: 999px; white-space: nowrap; flex-shrink: 0; font-weight: 600;
+  }
+  body:not(.adminpage) header .userbox .notif-panel {
+    position: fixed; left: 10px; right: 10px; top: 68px; width: auto;
+    max-height: calc(100vh - 88px); border-radius: 16px;
+  }
+
+  body:not(.adminpage) header .burger {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 42px; height: 42px; padding: 0; margin-left: 0; flex-shrink: 0;
+    border-radius: 12px; font-size: 1.35rem;
+  }
+  body:not(.adminpage) header .burger:active { transform: scale(.94); }
+}
+
+@media (max-width: 360px) {
+  body:not(.adminpage) header .brand { font-size: .95rem; }
+  body:not(.adminpage) header .brand img { width: 26px; height: 26px; }
+  body:not(.adminpage) header .userbox > a:last-child { padding: 7px 8px; }
+}
+
+/* ============================================================
+   ChoreHive — modern visual refresh (authoritative, loads last)
+   A single consistent polish layer: confident typography, tidy
+   controls, friendly empty states and phone-first spacing.
+   ============================================================ */
+
+/* ---------- Typography ---------- */
+h1 { font-weight: 800; letter-spacing: -.03em; }
+h2 { font-weight: 750; letter-spacing: -.015em; }
+.container > h1 { margin-bottom: 6px; }
+.container > h1 + p { color: #69788e; margin-bottom: 20px; }
+.eyebrow { letter-spacing: .14em; }
+
+/* ---------- Cards ---------- */
+.card { border-radius: 18px; }
+@media (max-width: 800px) { .card { border-radius: 16px; } }
+
+/* ---------- Empty states ---------- */
+.empty-state {
+  display: grid; justify-items: center; gap: 3px;
+  padding: 34px 18px; color: var(--muted); line-height: 1.55;
+  background: linear-gradient(180deg, #fbfcff, #f5f9ff);
+  border: 1px dashed #dbe4f1; border-radius: 16px;
+}
+.empty-state .big { font-size: 2.2rem; display: block; margin-bottom: 2px; opacity: .92; }
+.empty-state b { color: var(--ink); }
+
+/* Hide tables that have no data rows instead of showing a bare header. */
+.table-wrap:has(thead):not(:has(tbody tr)) { display: none; }
+.table-wrap:not(:has(thead)):has(tbody tr:only-child) { display: none; }
+
+/* ---------- Hire banner (booking) ---------- */
+.hire-selected-banner {
+  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  padding: 16px 18px; margin-bottom: 18px;
+  border: 1px solid #cfe8d9; border-radius: 16px;
+  background: linear-gradient(135deg, #eefaf2, #f8fdfa); color: #1d5b3a;
+}
+.hire-selected-banner > span:first-child {
+  width: 30px; height: 30px; flex-shrink: 0; display: grid; place-items: center;
+  border-radius: 50%; background: #1f8a4d; color: #fff; font-size: .9rem; font-weight: 900;
+}
+.hire-selected-person { min-width: 0; }
+.hire-selected-person b { display: block; font-size: .98rem; color: #17512f; }
+.hire-selected-person small { display: block; margin-top: 3px; color: #4a7a5f; font-size: .82rem; line-height: 1.5; }
+.hire-selected-banner > a { margin-left: auto; font-weight: 700; color: #1f7a4a; white-space: nowrap; }
+@media (max-width: 560px) {
+  .hire-selected-banner > a { margin-left: 0; width: 100%; }
+}
+
+/* ---------- Controls ---------- */
+.btn, button, input[type="submit"], input[type="button"] {
+  font-weight: 650;
+  -webkit-tap-highlight-color: transparent;
+}
+.btn .bi, button .bi { line-height: 1; }
+.btn:focus-visible, button:focus-visible { outline: none; box-shadow: var(--ring); }
+.btn:active, button:active { transform: translateY(0) scale(.97); }
+
+@media (max-width: 480px) {
+  .actions .btn, .actions button, .booking-submit-row .btn { flex: 1 1 auto; }
+}
+
+/* ---------- Forms ---------- */
+.form-grid { gap: 2px 18px; }
+input, select, textarea { border-radius: 12px; }
+input:disabled, select:disabled, textarea:disabled { background: #f4f7fc; color: #8492a6; }
+
+/* ---------- Links with motion ---------- */
+.market-text-link, .profile-back a {
+  display: inline-flex; align-items: center; gap: 5px;
+  transition: transform .16s var(--ui-ease), color .16s var(--ui-ease);
+}
+.market-text-link:hover { transform: translateX(2px); }
+
+/* ============================================================
+   Shared site header for the standalone public pages
+   (homepage, public worker directory, contact) so they match the
+   in-app header. Scoped to .site-header — logged-in app pages
+   keep using the app layout and are unaffected.
+   Desktop: inline nav, no burger. Mobile/tablet: burger dropdown.
+   ============================================================ */
+.site-header {
+  position: sticky; top: 0; z-index: 60;
+  display: flex; align-items: center; gap: 10px;
+  min-height: 62px; padding: 8px clamp(14px, 3vw, 28px);
+  background: rgba(255, 255, 255, .88);
+  -webkit-backdrop-filter: saturate(180%) blur(14px);
+  backdrop-filter: saturate(180%) blur(14px);
+  border-bottom: 1px solid var(--line-2, #edf1f8);
+}
+.site-brand {
+  display: flex; align-items: center; gap: 10px; flex-shrink: 0;
+  font-weight: 800; font-size: 1.2rem; letter-spacing: -.012em;
+  color: var(--navy, #17427a); text-decoration: none;
+}
+.site-brand img {
+  width: 36px; height: 36px; border-radius: 50%; display: block;
+  box-shadow: 0 0 0 2px rgba(224, 170, 51, .5), 0 2px 8px rgba(23, 66, 122, .16);
+}
+.site-nav { display: flex; align-items: center; gap: 4px; margin-left: 14px; }
+.site-nav a {
+  color: #4a5a73; text-decoration: none; padding: 8px 13px;
+  border-radius: 999px; font-size: .93rem; font-weight: 500; white-space: nowrap;
+  transition: background .15s ease, color .15s ease;
+}
+.site-nav a:hover { background: #eef3fb; color: var(--navy, #17427a); }
+.site-actions {
+  margin-left: auto; display: flex; align-items: center;
+  gap: 9px; flex-shrink: 0;
+}
+.site-actions .btn-honey, .site-actions .btn-dark {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-height: 42px; padding: 10px 18px; border-radius: 12px;
+  font-weight: 600; text-decoration: none; white-space: nowrap;
+}
+.site-burger {
+  display: none; background: none; border: 0; color: var(--navy, #17427a);
+  font-size: 1.5rem; line-height: 1; cursor: pointer; padding: 10px 12px;
+  min-height: 42px; min-width: 42px; border-radius: 12px;
+  transition: background .15s ease, transform .15s ease;
+}
+.site-burger:hover { background: #eef3fb; }
+.site-burger:active { transform: scale(.94); }
+
+@media (max-width: 900px) {
+  .site-header { flex-wrap: wrap; gap: 8px; min-height: 58px; padding: 8px 14px; }
+  .site-nav {
+    position: absolute; top: 100%; left: 0; right: 0; margin: 0;
+    flex-direction: column; align-items: stretch; gap: 2px;
+    background: var(--card, #fff); border-bottom: 1px solid var(--line-2, #edf1f8);
+    border-radius: 0 0 18px 18px; padding: 10px 14px 16px;
+    box-shadow: 0 12px 38px rgba(23, 66, 122, .15);
+    max-height: 0; opacity: 0; visibility: hidden; overflow: hidden;
+    transform: translateY(-8px);
+    transition: max-height .25s ease, opacity .25s ease, transform .25s ease, visibility .25s ease;
+  }
+  .site-nav.open { max-height: 75vh; overflow: auto; opacity: 1; visibility: visible; transform: none; }
+  .site-nav a { padding: 12px 14px; font-size: .98rem; border-radius: 10px; }
+  .site-burger { display: inline-flex; align-items: center; justify-content: center; }
+}
+@media (max-width: 400px) {
+  .site-brand { font-size: 1.05rem; }
+  .site-brand img { width: 30px; height: 30px; }
+  .site-actions .btn-honey, .site-actions .btn-dark { padding: 9px 13px; font-size: .9rem; }
 }

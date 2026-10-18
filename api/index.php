@@ -15,7 +15,7 @@ $requestedPath = ltrim($requestedPath, '/');
 if (
     $projectRoot === false
     || !preg_match('~\A[a-zA-Z0-9_/-]+\.php\z~D', $requestedPath)
-    || preg_match('~\A(?:api|lib|uploads|\.git)(?:/|\z)~i', $requestedPath)
+    || preg_match('~\A(?:api|lib|uploads|tools|\.git)(?:/|\z)~i', $requestedPath)
     || in_array(strtolower($requestedPath), [
         'config.php',
         'config.local.php',

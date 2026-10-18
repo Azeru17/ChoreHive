@@ -10,7 +10,7 @@
       "status": 404
     },
     {
-      "src": "^/(?:api|lib|uploads|\\.git)(?:/.*)?$",
+      "src": "^/(?:api|lib|uploads|tools|\\.git)(?:/.*)?$",
       "status": 404
     },
     {

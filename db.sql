@@ -10,6 +10,7 @@ CREATE TABLE users (
   worker_approved TINYINT(1) NOT NULL DEFAULT 0,
   phone VARCHAR(30),
   address VARCHAR(255),
+  city VARCHAR(100),
   bio TEXT,
   avatar VARCHAR(255) NULL,
   is_new TINYINT(1) DEFAULT 1,
@@ -97,6 +98,18 @@ CREATE TABLE notifications (
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
+CREATE TABLE contact_messages (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(100) NOT NULL,
+  email VARCHAR(120) NOT NULL,
+  message TEXT NOT NULL,
+  is_read TINYINT(1) NOT NULL DEFAULT 0,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  read_at DATETIME NULL,
+  INDEX idx_contact_messages_unread_created (is_read, created_at),
+  INDEX idx_contact_messages_created (created_at)
+);
+
 CREATE TABLE audit_log (
   id INT AUTO_INCREMENT PRIMARY KEY,
   user_id INT NULL,
@@ -139,10 +152,10 @@ CREATE TABLE worker_portfolio (
 );
 
 -- Local XAMPP seed only (passwords are all "password123"). Do not use these accounts on Hostinger.
-INSERT INTO users (name,email,password,role,phone,address,bio) VALUES
-('Admin','admin@chorehive.test','$2y$10$eCcdevjWXEbau2UcRR4bm.2Zg1XWLLfZUq.rB/lde7BCyTjQOAghG','admin','0900-000-0000','Office',NULL),
-('Maria Santos','maria@client.test','$2y$10$eCcdevjWXEbau2UcRR4bm.2Zg1XWLLfZUq.rB/lde7BCyTjQOAghG','client','0917-111-1111','123 Rizal St.',''),
-('Juan Dela Cruz','juan@worker.test','$2y$10$eCcdevjWXEbau2UcRR4bm.2Zg1XWLLfZUq.rB/lde7BCyTjQOAghG','worker','0918-222-2222','45 Bonifacio Ave.','Experienced house cleaner, 5 years.');
+INSERT INTO users (name,email,password,role,phone,address,city,bio) VALUES
+('Admin','admin@chorehive.test','$2y$10$eCcdevjWXEbau2UcRR4bm.2Zg1XWLLfZUq.rB/lde7BCyTjQOAghG','admin','0900-000-0000','Office','Cebu City',NULL),
+('Maria Santos','maria@client.test','$2y$10$eCcdevjWXEbau2UcRR4bm.2Zg1XWLLfZUq.rB/lde7BCyTjQOAghG','client','0917-111-1111','123 Rizal St.','Cebu City',''),
+('Juan Dela Cruz','juan@worker.test','$2y$10$eCcdevjWXEbau2UcRR4bm.2Zg1XWLLfZUq.rB/lde7BCyTjQOAghG','worker','0918-222-2222','45 Bonifacio Ave.','Cebu City','Experienced house cleaner, 5 years.');
 
 UPDATE users SET worker_approved=1 WHERE email='juan@worker.test';
 
@@ -200,8 +213,32 @@ CREATE TABLE IF NOT EXISTS chat_messages (
   thread_id INT NOT NULL,
   sender_id INT NOT NULL,
   message TEXT NOT NULL,
+  is_deleted TINYINT(1) NOT NULL DEFAULT 0,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   INDEX idx_thread_message (thread_id, id),
   FOREIGN KEY (thread_id) REFERENCES chat_threads(id) ON DELETE CASCADE,
   FOREIGN KEY (sender_id) REFERENCES users(id) ON DELETE CASCADE
 );
+
+-- Per-role ID allocation (see get_next_role_id() in config.php).
+CREATE TABLE IF NOT EXISTS role_id_counters (
+  role ENUM('client','worker','admin') NOT NULL PRIMARY KEY,
+  next_id INT UNSIGNED NOT NULL DEFAULT 1
+);
+
+CREATE TABLE IF NOT EXISTS role_id_freed (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  role ENUM('client','worker','admin') NOT NULL,
+  freed_id INT UNSIGNED NOT NULL,
+  UNIQUE KEY uq_role_id_freed (role, freed_id)
+);
+
+INSERT INTO role_id_counters (role, next_id)
+SELECT 'client', COALESCE(MAX(id), 0) + 1 FROM users WHERE role = 'client'
+ON DUPLICATE KEY UPDATE next_id = GREATEST(next_id, VALUES(next_id));
+INSERT INTO role_id_counters (role, next_id)
+SELECT 'worker', COALESCE(MAX(id), 0) + 1 FROM users WHERE role = 'worker'
+ON DUPLICATE KEY UPDATE next_id = GREATEST(next_id, VALUES(next_id));
+INSERT INTO role_id_counters (role, next_id)
+SELECT 'admin', COALESCE(MAX(id), 0) + 1 FROM users WHERE role = 'admin'
+ON DUPLICATE KEY UPDATE next_id = GREATEST(next_id, VALUES(next_id));

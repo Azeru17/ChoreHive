@@ -71,6 +71,6 @@ require 'layout.php';
     <button>Login</button>
   </form>
   <p class="muted"><a href="forgot_password.php">Forgot your password?</a></p>
-  <p class="muted">No account? <a href="register.php">Register as client</a></p>
+  <p class="muted">No account? <a href="register.php">Register here</a></p>
 </div>
 <?php require 'footer.php'; ?>

@@ -63,8 +63,8 @@ $finished = (int)$conn->query("SELECT COUNT(*) c FROM bookings
 
 // Build calendar for current + next month
 $bookings_by_day = [];
-$res2 = $conn->query("SELECT b.schedule, b.status, s.name service FROM bookings b
-  JOIN services s ON s.id=b.service_id WHERE b.client_id={$u['id']}
+$res2 = $conn->query("SELECT b.id,b.schedule,b.status,b.payment_status,b.payment_method,b.total_price,s.name service,w.name worker FROM bookings b
+  JOIN services s ON s.id=b.service_id LEFT JOIN users w ON w.id=b.worker_id WHERE b.client_id={$u['id']}
   AND b.status NOT IN ('cancelled')");
 while ($r = $res2->fetch_assoc()) {
     $day = date('Y-m-d', strtotime($r['schedule']));
@@ -84,18 +84,19 @@ $next = (clone $month)->modify('+1 month')->format('Y-m');
   <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
     <h2 style="margin-bottom:0;">All Bookings</h2>
     <?php if ((int)$finished > 0): ?>
-      <form method="post" onsubmit="return confirm('Clear all $finished finished booking(s)?\n\nTheir checklists, photos and feedback will be permanently deleted.');">
+      <form method="post" data-confirm="Permanently clear all <?= (int)$finished ?> finished or cancelled bookings from your history? Their checklists, photos and feedback will also be deleted. This cannot be undone. Payments are not refunded by deleting booking records." data-confirm-title="Clear booking history" data-confirm-yes="Yes, clear all">
         <?= csrf_field() ?>
         <button class="btn btn-sm btn-outline" name="clear_history" value="1">🧹 Clear history (<?= (int)$finished ?>)</button>
       </form>
     <?php endif; ?>
   </div>
   <?php if ($res->num_rows === 0): ?>
-    <div class="empty-state"><span class="big">🧹</span>No bookings yet.<br><a href="book.php">Book your first service</a>.</div>
-  <?php endif; ?>
-  <div class="table-wrap">
-  <table>
-    <tr><th>ID</th><th>Service</th><th>Schedule</th><th>Worker</th><th>Status</th><th>Payment</th><th>Method</th><th></th></tr>
+    <div class="empty-state"><span class="big">🧹</span>No bookings yet.<br><a href="workers.php">Find a cleaner to book your first service</a>.</div>
+  <?php else: ?>
+  <div class="table-wrap booking-history-scroll" role="region" aria-label="Booking history" tabindex="0">
+  <table class="booking-history-table">
+    <thead><tr><th>ID</th><th>Service</th><th>Schedule</th><th>Worker</th><th>Status</th><th>Payment</th><th>Method</th><th>Actions</th></tr></thead>
+    <tbody>
     <?php while ($b = $res->fetch_assoc()): ?>
     <tr>
       <td>#<?= $b['id'] ?></td>
@@ -105,13 +106,13 @@ $next = (clone $month)->modify('+1 month')->format('Y-m');
       <td><span class="badge <?= status_class($b['status']) ?>"><?= str_replace('_',' ',$b['status']) ?></span></td>
       <td><?= e($b['payment_status'] === 'demo_paid' ? 'demo-paid · no money transferred' : $b['payment_status']) ?></td>
       <td><?= e(ucfirst($b['payment_method'])) ?></td>
-      <td>
+      <td class="booking-row-actions"><div class="booking-action-list">
         <a class="btn btn-sm btn-sec" href="booking.php?id=<?= $b['id'] ?>">View</a>
         <?php if ($b['status'] === 'awaiting_verification'): ?>
           <?php if ($b['payment_method'] === 'cash'): ?>
             <a class="btn btn-sm" href="booking.php?id=<?= $b['id'] ?>">Review &amp; confirm</a>
           <?php elseif (in_array($b['payment_status'], ['paid','demo_paid'], true)): ?>
-            <form method="post" action="booking.php?id=<?= $b['id'] ?>" style="display:inline" onsubmit="return confirm('Verify the completed work and finish this booking?');"><?= csrf_field() ?><button class="btn btn-sm" name="verify" value="1">✔ Confirm Job Finish</button></form>
+            <form class="booking-action-form" method="post" action="booking.php?id=<?= $b['id'] ?>" data-confirm="Verify the completed work and finish this booking?" data-confirm-title="Confirm job finish" data-confirm-yes="Yes, finish"><?= csrf_field() ?><button class="btn btn-sm" name="verify" value="1">✔ Confirm Job Finish</button></form>
           <?php else: ?>
             <a class="btn btn-sm btn-sec" href="pay.php?id=<?= $b['id'] ?>">Pay now</a>
           <?php endif; ?>
@@ -119,21 +120,24 @@ $next = (clone $month)->modify('+1 month')->format('Y-m');
           <?php if ((int)($b['client_started_ack'] ?? 0) === 1): ?>
             <span class="muted" style="font-size:.78rem;">✓ Start confirmed</span>
           <?php else: ?>
-            <form method="post" action="booking.php?id=<?= $b['id'] ?>" style="display:inline" onsubmit="return confirm('Confirm the worker has started this job?');"><?= csrf_field() ?><button class="btn btn-sm" name="confirm_job_start" value="1">Confirm Job</button></form>
+            <form class="booking-action-form" method="post" action="booking.php?id=<?= $b['id'] ?>" data-confirm="Confirm that the worker has arrived and started booking #<?= (int)$b['id'] ?>? This only acknowledges the start; it does not confirm that the cleaning is finished or that payment was made." data-confirm-title="Confirm job start"><?= csrf_field() ?><button class="btn btn-sm" name="confirm_job_start" value="1">Confirm Job</button></form>
           <?php endif; ?>
         <?php endif; ?>
         <?php if (in_array($b['status'], ['pending','assigned','in_progress','awaiting_verification'], true)): ?>
           <a class="btn btn-sm btn-sec" href="booking.php?id=<?= $b['id'] ?>">Cancel</a>
         <?php endif; ?>
-        <form method="post" style="display:inline"><?= csrf_field() ?><button class="btn btn-sm" name="rebook" value="<?= $b['id'] ?>">Rebook</button></form>
+        <form class="booking-action-form" method="post"><?= csrf_field() ?><button class="btn btn-sm" name="rebook" value="<?= $b['id'] ?>">Rebook</button></form>
         <?php if (booking_is_finished($b['status'])): ?>
-          <form method="post" style="display:inline" onsubmit="return confirm('Delete booking #<?= $b['id'] ?> permanently?\n\nIts checklist, photos and feedback will be removed too.');"><?= csrf_field() ?><button class="icon-btn danger" name="delete_booking" value="<?= $b['id'] ?>" title="Delete booking" aria-label="Delete booking">🗑</button></form>
+          <form class="booking-action-form" method="post" data-confirm="Permanently delete booking #<?= (int)$b['id'] ?>? Its checklist, photos and feedback will also be deleted. This cannot be undone.<?= in_array($b['payment_status'], ['paid','demo_paid'], true) ? ' Deleting the booking does not refund its payment.' : '' ?>" data-confirm-title="Delete booking" data-confirm-yes="Yes, delete"><?= csrf_field() ?><button class="icon-btn danger" name="delete_booking" value="<?= $b['id'] ?>" title="Delete booking" aria-label="Delete booking">🗑</button></form>
         <?php endif; ?>
-      </td>
+      </div></td>
     </tr>
     <?php endwhile; ?>
+    </tbody>
   </table>
   </div>
+  <p class="booking-history-hint">Scroll the booking table horizontally to see all details and actions.</p>
+  <?php endif; ?>
 </div>
 
 <div class="card">
@@ -156,20 +160,78 @@ $next = (clone $month)->modify('+1 month')->format('Y-m');
         if ($i > 0 && $i % 7 === 0) echo '</tr><tr>';
         ?>
         <td class="<?= $in_month ? '' : 'out' ?> <?= $is_today ? 'today' : '' ?>">
-          <div class="daynum"><?= (int)$cursor->format('j') ?></div>
-          <?php foreach ($has as $ev): ?>
-            <div class="ev ev-<?= status_class($ev['status']) ?: 'info' ?>" title="<?= e($ev['service']) ?> — <?= e($ev['status']) ?>"></div>
-          <?php endforeach; ?>
+          <?php if ($has): ?>
+            <button type="button" class="calendar-day-button" data-day="<?= e($key) ?>" data-bookings="<?= e(json_encode($has, JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_TAG | JSON_HEX_AMP | JSON_INVALID_UTF8_SUBSTITUTE)) ?>" aria-pressed="false" aria-label="<?= e($cursor->format('F j, Y')) ?>, <?= count($has) ?> scheduled booking<?= count($has) === 1 ? '' : 's' ?>">
+              <span class="daynum"><?= (int)$cursor->format('j') ?></span>
+              <span class="calendar-day-events"><?php foreach ($has as $ev): ?><span class="ev ev-<?= status_class($ev['status']) ?: 'info' ?>"></span><?php endforeach; ?></span>
+            </button>
+          <?php else: ?>
+            <span class="calendar-day-empty"><span class="daynum"><?= (int)$cursor->format('j') ?></span></span>
+          <?php endif; ?>
         </td>
         <?php $cursor->modify('+1 day'); endfor; ?>
     </tr>
   </table>
-  <p class="muted" style="margin-top:6px;">Dots mark scheduled bookings — hover for details.</p>
+  <p class="muted" style="margin-top:10px;">Select a date with a dot to view its scheduled bookings.</p>
+  <section class="calendar-booking-details" id="calendarBookingDetails" aria-live="polite" hidden>
+    <h3 id="calendarDetailsTitle"></h3>
+    <div id="calendarDetailsList"></div>
+  </section>
 </div>
 </div>
+<script>
+(() => {
+  const details = document.getElementById('calendarBookingDetails');
+  const title = document.getElementById('calendarDetailsTitle');
+  const list = document.getElementById('calendarDetailsList');
+  if (!details || !title || !list) return;
+  document.querySelectorAll('.calendar-day-button').forEach(button => {
+    button.addEventListener('click', () => {
+      document.querySelectorAll('.calendar-day-button[aria-pressed="true"]').forEach(active => active.setAttribute('aria-pressed', 'false'));
+      button.setAttribute('aria-pressed', 'true');
+      const bookings = JSON.parse(button.dataset.bookings || '[]');
+      const selectedDate = new Date(button.dataset.day + 'T12:00:00');
+      title.textContent = new Intl.DateTimeFormat(undefined, { dateStyle: 'full' }).format(selectedDate);
+      list.replaceChildren();
+      bookings.forEach(booking => {
+        const card = document.createElement('article');
+        card.className = 'calendar-booking-item';
+        const heading = document.createElement('div');
+        heading.className = 'calendar-booking-heading';
+        const service = document.createElement('strong');
+        service.textContent = booking.service;
+        const time = document.createElement('span');
+        time.textContent = new Intl.DateTimeFormat(undefined, { timeStyle: 'short' }).format(new Date(booking.schedule.replace(' ', 'T')));
+        heading.append(service, time);
+        const meta = document.createElement('p');
+        meta.textContent = `Booking #${booking.id} · ${booking.status.replaceAll('_', ' ')} · ${booking.worker || 'Cleaner not assigned yet'}`;
+        const payment = document.createElement('p');
+        payment.textContent = `${booking.payment_method.toUpperCase()} · ${booking.payment_status.replaceAll('_', ' ')} · ₱${Number(booking.total_price).toFixed(2)}`;
+        const link = document.createElement('a');
+        link.className = 'market-text-link';
+        link.href = `booking.php?id=${encodeURIComponent(booking.id)}`;
+        link.textContent = 'View booking details →';
+        card.append(heading, meta, payment, link);
+        list.append(card);
+      });
+      details.hidden = false;
+      details.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    });
+  });
+})();
+</script>
 <style>
   .two-col { display:grid; grid-template-columns:1.4fr 1fr; gap:16px; align-items:start; }
   .two-col > * { min-width:0; }
+  .booking-history-scroll { scrollbar-width:thin; }
+  .table-wrap .booking-history-table { width:100%; min-width:980px; table-layout:auto; }
+  .booking-history-table th, .booking-history-table td { white-space:normal; overflow-wrap:break-word; word-break:normal; vertical-align:middle; }
+  .booking-history-table th:nth-child(6), .booking-history-table td:nth-child(6) { min-width:150px; }
+  .booking-history-table th:last-child, .booking-history-table td:last-child { min-width:240px; }
+  .booking-action-list { display:flex; align-items:center; flex-wrap:wrap; gap:7px; min-width:220px; }
+  .booking-action-form { display:inline-flex; flex:0 0 auto; margin:0; }
+  .booking-action-list .btn { flex:0 0 auto; max-width:none; white-space:nowrap; }
+  .booking-history-hint { margin:8px 0 0; color:#718198; font-size:.76rem; }
   @media (max-width:800px) { .two-col { grid-template-columns:1fr; } }
   .card > .calendar, .card .calendar { min-width:0; width:100%; display:block; }
   .calendar { display:table; }
@@ -177,12 +239,26 @@ $next = (clone $month)->modify('+1 month')->format('Y-m');
     .calendar { min-width:0; }
     .calendar th, .calendar td { padding:2px; font-size:.75rem; }
   }
-  .calendar td { text-align:center; vertical-align:top; height:44px; padding:3px; border:1px solid #e3e9f2; }
-  .calendar .out { color:#a9b6cc; background:#f7f9fd; }
+  .calendar td { text-align:center; vertical-align:middle; height:54px; padding:2px; border:1px solid #e3e9f2; background:#fff; }
+  .calendar .out { background:#f7f9fd; }
   .calendar .today { background:#eef4fd; }
   .daynum { font-size:.8rem; color:#6b7a90; }
-  .ev { width:8px; height:8px; border-radius:50%; margin:2px auto 0; }
+  .calendar-day-button,.calendar-day-empty { width:100%;height:100%;min-height:48px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;border:0;border-radius:8px;background:transparent;color:inherit;font:inherit; }
+  .calendar-day-button { cursor:pointer; }
+  .calendar-day-button:hover,.calendar-day-button[aria-pressed="true"] { background:#eaf6ed; }
+  .calendar-day-button:focus-visible { outline:2px solid #22814a;outline-offset:-2px; }
+  .calendar-day-button[aria-pressed="true"] .daynum { color:#176c3b;font-weight:850; }
+  .calendar-day-events { display:flex;align-items:center;justify-content:center;gap:3px; }
+  .ev { width:6px; height:6px; border-radius:50%; }
   .ev-ok{background:#2e7d32} .ev-warn{background:#b7791f} .ev-info{background:#1565c0} .ev-err{background:#c62828}
+  .calendar-booking-details { margin-top:16px;padding:15px;border:1px solid #dcebe0;border-radius:14px;background:linear-gradient(145deg,#f5fbf6,#fff); }
+  .calendar-booking-details h3 { margin:0 0 10px;color:#234d36;font-size:1rem; }
+  .calendar-booking-item { padding:12px 0;border-top:1px solid #e6efe8; }
+  .calendar-booking-item:first-child { border-top:0; }
+  .calendar-booking-heading { display:flex;justify-content:space-between;gap:8px;color:#28435f; }
+  .calendar-booking-heading span,.calendar-booking-item p { color:#718198;font-size:.78rem; }
+  .calendar-booking-item p { margin:5px 0; }
+  .calendar-booking-item .market-text-link { font-size:.8rem; }
 </style>
 <div id="lightbox"><img id="lightbox-img" src="" alt="Enlarged photo"></div>
 <?php require '../footer.php'; ?>

@@ -67,7 +67,7 @@ require '../layout.php';
   <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px;">
     <h2 style="margin-bottom:0;">All reviews</h2>
     <?php if ((int)$summary['cnt'] > 0): ?>
-      <form method="post" onsubmit="return confirm('Delete all <?= (int)$summary['cnt'] ?> review(s)?\n\nThis cannot be undone.');">
+      <form method="post" data-confirm="Delete all <?= (int)$summary['cnt'] ?> review(s)?\n\nThis cannot be undone." data-confirm-title="Delete reviews" data-confirm-yes="Yes, delete all">
         <?= csrf_field() ?>
         <button class="btn btn-sm btn-outline" name="clear_reviews" value="1">🧹 Delete all reviews</button>
       </form>
@@ -87,7 +87,7 @@ require '../layout.php';
         <td><span class="star-row"><?= str_repeat('⭐', (int)$r['rating']) ?></span> <span class="muted">(<?= (int)$r['rating'] ?>/5)</span></td>
         <td><?= $r['comment'] ? e($r['comment']) : '<span class="muted">No comment</span>' ?></td>
         <td>
-          <form method="post" onsubmit="return confirm('Delete this review from <?= e($r['client']) ?>?\n\nThis cannot be undone.');">
+          <form method="post" data-confirm="Delete this review from <?= e($r['client']) ?>?\n\nThis cannot be undone." data-confirm-title="Delete review" data-confirm-yes="Yes, delete">
             <?= csrf_field() ?>
             <button class="icon-btn danger" name="delete_review" value="<?= (int)$r['id'] ?>" title="Delete review" aria-label="Delete review">🗑</button>
           </form>

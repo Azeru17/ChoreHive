@@ -8,7 +8,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_profile'])) {
     $name    = v_str('name', 100, true, 'Full name');
     $phone   = v_str('phone', 30, false, 'Phone');
     $address = v_str('address', 255, false, 'Address');
-    update_profile($u['id'], $name, $phone, $address, $u['bio']);
+    $city    = v_str('city', 100, false, 'City / Municipality');
+    update_profile($u['id'], $name, $phone, $address, $city, $u['bio']);
     $new = handle_avatar_upload('avatar', $u['id'], $conn); // may be null
     if ($new) {
         $old = avatar_file($u);
@@ -120,15 +121,16 @@ require '../layout.php';
     <div class="form-grid">
       <div><label>Full name</label><input name="name" maxlength="100" value="<?= e($u['name']) ?>" required></div>
       <div><label>Email</label><input value="<?= e($u['email']) ?>" disabled></div>
-      <div><label>Phone</label><input name="phone" maxlength="30" value="<?= e($u['phone'] ?? '') ?>" placeholder="09XX XXX XXXX"></div>
-      <div><label>Address</label><input name="address" maxlength="255" value="<?= e($u['address'] ?? '') ?>" placeholder="Street, city"></div>
+      <div><label>Phone</label><input type="tel" name="phone" maxlength="30" value="<?= e($u['phone'] ?? '') ?>" placeholder="09XX XXX XXXX" pattern="[0-9+\-\s()]{7,30}" required></div>
+      <div><label>Address</label><input name="address" maxlength="255" value="<?= e($u['address'] ?? '') ?>" placeholder="House number, street, barangay"></div>
+      <div><label>City / Municipality</label><input name="city" maxlength="100" value="<?= e($u['city'] ?? '') ?>" placeholder="e.g. Cebu City"></div>
     </div>
     <label>Profile picture <span class="muted" style="font-weight:400;">(JPG, PNG or WebP · max 2&nbsp;MB)</span></label>
     <input type="file" name="avatar" accept="image/jpeg,image/png,image/webp">
     <p class="actions" style="margin-top:6px;">
       <button name="save_profile" value="1">💾 Save changes</button>
       <?php if ($av): ?>
-      <button name="remove_avatar" value="1" class="btn-sec" onclick="return confirm('Remove your profile picture?')">Remove picture</button>
+      <button name="remove_avatar" value="1" class="btn-sec" data-confirm="Remove your profile picture?" data-confirm-title="Remove picture" data-confirm-yes="Yes, remove">Remove picture</button>
       <?php endif; ?>
     </p>
   </form>
@@ -140,9 +142,9 @@ require '../layout.php';
   <form method="post" autocomplete="off">
     <?= csrf_field() ?>
     <div class="form-grid">
-      <div><label>Current password</label><input type="password" name="current_password" required autocomplete="current-password"></div>
-      <div><label>New password</label><input type="password" name="new_password" minlength="8" maxlength="72" required autocomplete="new-password"></div>
-      <div><label>Confirm new password</label><input type="password" name="confirm_password" minlength="8" maxlength="72" required autocomplete="new-password"></div>
+      <div><label for="profileCurrentPassword">Current password</label><div class="password-field"><input id="profileCurrentPassword" type="password" name="current_password" required autocomplete="current-password"><button class="password-toggle" type="button" data-password-toggle="profileCurrentPassword" aria-label="Show password" aria-pressed="false"><i class="bi bi-eye" aria-hidden="true"></i><span>Show</span></button></div></div>
+      <div><label for="profileNewPassword">New password</label><div class="password-field"><input id="profileNewPassword" type="password" name="new_password" minlength="8" maxlength="72" required autocomplete="new-password"><button class="password-toggle" type="button" data-password-toggle="profileNewPassword" aria-label="Show password" aria-pressed="false"><i class="bi bi-eye" aria-hidden="true"></i><span>Show</span></button></div></div>
+      <div><label for="profileConfirmPassword">Confirm new password</label><div class="password-field"><input id="profileConfirmPassword" type="password" name="confirm_password" minlength="8" maxlength="72" required autocomplete="new-password"><button class="password-toggle" type="button" data-password-toggle="profileConfirmPassword" aria-label="Show password" aria-pressed="false"><i class="bi bi-eye" aria-hidden="true"></i><span>Show</span></button></div></div>
     </div>
     <button name="change_password" value="1" class="btn-sec">🔒 Update password</button>
   </form>
@@ -167,7 +169,7 @@ require '../layout.php';
             <?= csrf_field() ?>
             <input type="hidden" name="address_id" value="<?= (int)$sa['id'] ?>">
             <button type="button" class="btn btn-sm btn-sec" onclick="editAddr(<?= (int)$sa['id'] ?>, <?= json_encode($sa['label']) ?>, <?= json_encode($sa['address']) ?>, <?= json_encode($sa['address_lat'] ?? '') ?>, <?= json_encode($sa['address_lng'] ?? '') ?>)">Edit</button>
-            <button name="delete_address" value="1" class="btn btn-sm" style="background:#fdecea;color:#c0392b;border-color:#f5c6c0;" onclick="return confirm('Delete this saved address?')">Delete</button>
+            <button name="delete_address" value="1" class="btn btn-sm" style="background:#fdecea;color:#c0392b;border-color:#f5c6c0;" data-confirm="Delete this saved address?" data-confirm-title="Delete address" data-confirm-yes="Yes, delete">Delete</button>
           </form>
         </div>
       <?php endforeach; ?>

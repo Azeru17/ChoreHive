@@ -330,7 +330,7 @@ if ($u) {
   .btn, button { border-radius:var(--radius-pill); }
   .stat { border-radius:20px; }
   th { text-transform:uppercase; font-size:.72rem; letter-spacing:.07em; color:var(--muted); }
-  @media (max-width:800px) { nav.main .notif-wrap { display:block; } nav.main .bell { width:100%; justify-content:flex-start; } .notif-panel { width:auto; left:0; right:0; } }
+  @media (max-width:800px) { .notif-wrap { display:block; width:100%; } .bell { width:100%; justify-content:flex-start; } .notif-panel { position:fixed; left:0; right:0; width:auto; top:76px; max-height:calc(100vh - 96px); overflow:auto; border-radius:var(--radius); } }
 
   /* Sidebar */
   .sidebar-admin { position:fixed; top:58px; left:0; bottom:0; width:264px; background:linear-gradient(180deg,#123566,var(--navy-dark)); color:#fff; z-index:55; padding:22px 0 30px; overflow-y:auto; }
@@ -404,15 +404,19 @@ if ($u) {
   @media (max-width: 800px) {
     .burger { display:block; }
     nav.main {
-      display:flex; position:absolute; top:60px; left:0; right:0; background:var(--card);
-      border-bottom:1px solid var(--line-2); flex-direction:column; align-items:stretch;
+      display:flex; position:absolute; top:100%; left:0; right:0; background:var(--card);
+      border-bottom:1px solid var(--line-2); border-radius:0 0 18px 18px;
+      flex-direction:column; align-items:stretch;
       padding:10px 14px 16px; box-shadow:var(--shadow-lg);
       max-height:0; opacity:0; visibility:hidden; overflow:hidden; transform:translateY(-8px);
       transition:max-height var(--med) var(--ease), opacity var(--med) var(--ease), transform var(--med) var(--ease), visibility var(--med);
     }
-    nav.main.open { max-height:70vh; overflow:auto; opacity:1; visibility:visible; transform:none; }
-    nav.main a { padding:12px 14px; font-size:.98rem; border-radius:var(--radius-sm); }
-    .userbox .who { display:none; }
+    nav.main.open { max-height:75vh; overflow:auto; opacity:1; visibility:visible; transform:none; }
+    nav.main a { padding:12px 14px; font-size:.98rem; border-radius:var(--radius-sm); border:0; }
+    .userbox .who { gap: 6px; min-width: 0; }
+    .userbox .who .avatar { width: 28px; height: 28px; flex-shrink: 0; }
+    .userbox .who span:not(.avatar),
+    .userbox .who i { display: none; }
     .container { margin:18px auto; padding:0 14px; }
     .card { padding:18px; }
     h1 { font-size:1.35rem; }
@@ -420,15 +424,6 @@ if ($u) {
     .client-header { flex-wrap:wrap; column-gap:8px; padding:0 14px; }
     .client-header .brand { order:1; }
     .client-header .userbox { order:2; }
-    .client-header .userbox .who { display:none; }
-    .client-header nav.main.client-main {
-      display:flex; position:static; order:3; flex:0 0 100%; width:100%; gap:3px; margin:0;
-      flex-direction:row; align-items:center; padding:0 0 8px; max-height:none; overflow-x:auto;
-      opacity:1; visibility:visible; transform:none; background:transparent; border:0; box-shadow:none;
-      scrollbar-width:none;
-    }
-    .client-header nav.main.client-main::-webkit-scrollbar { display:none; }
-    .client-header nav.main.client-main a { flex:0 0 auto; padding:8px 11px; font-size:.82rem; border-radius:var(--radius-pill); }
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -455,7 +450,7 @@ if ($u) {
       <?php else: ?><span class="avatar sm"><?= e(initials($u['name'])) ?></span><?php endif; ?>
       <span><?= e($u['name']) ?></span>
     </a>
-    <a href="<?= $base ?>/logout.php" title="Logout"><i class="bi bi-box-arrow-right"></i> Logout</a>
+    <a href="<?= $base ?>/logout.php" title="Logout" data-confirm="Are you sure you want to log out?" data-confirm-title="Log out" data-confirm-yes="Yes, log out"><i class="bi bi-box-arrow-right"></i> Logout</a>
   </div>
 </div>
 <nav class="sidebar-admin" id="mainnav">
@@ -470,18 +465,18 @@ if ($u) {
   <a href="dashboard.php"><i class="bi bi-speedometer2"></i> Overview</a>
   <a href="bookings.php"><i class="bi bi-calendar3"></i> Bookings</a>
   <a href="chats.php"><i class="bi bi-chat-dots"></i> Customer Chats</a>
+  <a href="contact.php"><i class="bi bi-envelope"></i> Contact Messages</a>
   <a href="users.php"><i class="bi bi-people"></i> Users &amp; Badges</a>
   <a href="services.php"><i class="bi bi-tags"></i> Services</a>
   <a href="reports.php"><i class="bi bi-bar-chart"></i> Reports</a>
   <a href="audit.php"><i class="bi bi-clock-history"></i> Audit Log</a>
   <div class="sect">Site</div>
   <a href="<?= $base ?>/index.php"><i class="bi bi-house"></i> View Homepage</a>
-  <a href="<?= $base ?>/logout.php"><i class="bi bi-box-arrow-right"></i> Logout</a>
+  <a href="<?= $base ?>/logout.php" data-confirm="Are you sure you want to log out?" data-confirm-title="Log out" data-confirm-yes="Yes, log out"><i class="bi bi-box-arrow-right"></i> Logout</a>
 </nav>
 <?php else: ?>
-<header class="<?= $u && $u['role'] === 'client' ? 'client-header' : '' ?>">
+<header class="<?= $u ? $u['role'] . '-header' : '' ?>">
   <a class="brand" href="<?= $base ?>/index.php"><img src="<?= $base ?>/assets/logo.png" alt="ChoreHive logo"> ChoreHive</a>
-  <?php if ($u && $u['role'] !== 'client'): ?><button class="burger" id="burger" aria-label="Open navigation menu" aria-controls="mainnav" aria-expanded="false">☰</button><?php endif; ?>
   <?php if ($u): ?>
   <?php ob_start(); ?>
     <span class="notif-wrap">
@@ -491,7 +486,7 @@ if ($u) {
       </div>
     </span>
   <?php $bell_html = ob_get_clean(); ?>
-  <nav class="main <?= $u['role'] === 'client' ? 'client-main' : '' ?>" id="mainnav">
+  <nav class="main <?= $u['role'] === 'client' ? 'client-main' : ($u['role'] === 'worker' ? 'worker-main' : '') ?>" id="mainnav">
     <a href="<?= $base ?>/<?= $u['role'] ?>/dashboard.php"><i class="bi bi-speedometer2"></i> Dashboard</a>
     <?php if ($u['role']==='client'): ?>
       <a href="<?= $base ?>/client/workers.php"><i class="bi bi-people"></i> Find a Cleaner</a>
@@ -503,7 +498,7 @@ if ($u) {
       <a href="<?= $base ?>/chat.php"><i class="bi bi-chat-dots"></i> Messages</a>
       <a href="<?= $base ?>/worker/reviews.php"><i class="bi bi-star"></i> My Reviews</a>
     <?php else: ?>
-      <a href="<?= $base ?>/admin/bookings.php">Bookings</a><a href="<?= $base ?>/admin/chats.php">Chats</a><a href="<?= $base ?>/admin/users.php">Users</a><a href="<?= $base ?>/admin/services.php">Services</a><a href="<?= $base ?>/admin/reports.php">Reports</a><a href="<?= $base ?>/admin/audit.php">Audit Log</a>
+      <a href="<?= $base ?>/admin/bookings.php">Bookings</a><a href="<?= $base ?>/admin/chats.php">Chats</a><a href="<?= $base ?>/admin/contact.php">Contact Messages</a><a href="<?= $base ?>/admin/users.php">Users</a><a href="<?= $base ?>/admin/services.php">Services</a><a href="<?= $base ?>/admin/reports.php">Reports</a><a href="<?= $base ?>/admin/audit.php">Audit Log</a>
     <?php endif; ?>
   </nav>
   <div class="userbox">
@@ -516,8 +511,9 @@ if ($u) {
       <?php endif; ?>
       <span><?= e($u['name']) ?></span>
     </a>
-    <a href="<?= $base ?>/logout.php">Logout</a>
+    <a href="<?= $base ?>/logout.php" data-confirm="Are you sure you want to log out?" data-confirm-title="Log out" data-confirm-yes="Yes, log out">Logout</a>
   </div>
+  <button class="burger" id="burger" type="button" aria-label="Toggle navigation menu" aria-controls="mainnav" aria-expanded="false"><i class="bi bi-list" aria-hidden="true"></i></button>
   <?php else: ?>
   <div class="userbox">
     <a href="<?= $base ?>/login.php">Login</a> · <a href="<?= $base ?>/register.php">Register</a>
@@ -667,19 +663,36 @@ document.addEventListener('click', function (ev) {
 <script>
 /* Shared photo lightbox (used by client + worker photo grids) */
 (function () {
-  var lb = document.getElementById('lightbox');
-  if (!lb) return;
-  var img = document.getElementById('lightbox-img');
+  var lastPhoto = null;
+  function closeLightbox(lb) {
+    if (!lb) return;
+    lb.style.display = 'none';
+    lb.setAttribute('aria-hidden', 'true');
+    if (lastPhoto) lastPhoto.focus();
+  }
   document.addEventListener('click', function (ev) {
-    if (ev.target.classList && ev.target.classList.contains('lightbox-img')) {
-      img.src = ev.target.src;
+    var photo = ev.target.closest && ev.target.closest('.lightbox-img');
+    var lb = document.getElementById('lightbox');
+    var img = document.getElementById('lightbox-img');
+    if (photo && lb && img) {
+      lastPhoto = photo;
+      img.src = photo.src;
+      img.alt = photo.alt || 'Enlarged booking photo';
       lb.style.display = 'flex';
-    } else if (ev.target.closest('#lightbox')) {
-      lb.style.display = 'none';
+      lb.setAttribute('aria-hidden', 'false');
+      img.focus();
+    } else if (lb && ev.target === lb) {
+      closeLightbox(lb);
     }
   });
   document.addEventListener('keydown', function (ev) {
-    if (ev.key === 'Escape') lb.style.display = 'none';
+    var lb = document.getElementById('lightbox');
+    if (!lb || lb.getAttribute('aria-hidden') === 'true') return;
+    if (ev.key === 'Escape') closeLightbox(lb);
+    if ((ev.key === 'Enter' || ev.key === ' ') && ev.target.classList && ev.target.classList.contains('lightbox-img')) {
+      ev.preventDefault();
+      ev.target.click();
+    }
   });
 })();
 </script>

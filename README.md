@@ -7,7 +7,9 @@ A starter PHP/MySQL prototype implementing the features described in the ChoreHi
 - **Three roles:** Client, Worker, Admin
 - **Clients:** discover cleaner profiles, compare ratings/status, chat before hiring, create bookings with a custom checklist and optional map pin, choose cash-after-work or PayMongo GCash/Maya checkout, and print/save a payment receipt.
 - **Workers:** job list with payment gates (online PayMongo checkout must be paid before starting), status flow (assigned → in progress → awaiting verification), map directions, checklist completion, before/after photo uploads, and reviews.
-- **Admins:** dashboard stats, assign workers to bookings, manage users, **award/revoke skill badges**, manage services, and a **Reports & Performance Dashboard** (completed booking value, per-service performance, worker ratings, worker schedule, and returning-customer/rebooking insights inferred from completed booking history).
+- **Admins:** dashboard stats, assign workers to bookings, manage users, **award/revoke skill badges**, manage services, and a **Reports & Performance Dashboard** (recorded paid booking value, per-service performance, worker ratings, worker schedule, and returning-customer summaries based on multiple completed bookings). Clients can manually rebook from booking history.
+
+See [docs/SYSTEM_DESCRIPTION.md](docs/SYSTEM_DESCRIPTION.md) for the formal project description, user roles, feature behavior, workflow, screenshot descriptions, and current implementation limits.
 
 ## Tech Stack
 
@@ -88,12 +90,15 @@ Worker booking-value statistics sum recorded payments for completed bookings ass
 Back up both the project files and database first. Do **not** import `db.sql` into a database with existing data. Apply only migrations for schema features that the database does not already have, in this order:
 
 1. `migration_marketplace_chat.sql`
-2. `migration_payments_maps.sql`
-3. `migration_paymongo.sql`
-4. `migration_new_features.sql`
-5. `migration_demo_payments_notifications.sql`
+2. `migration_chat_message_delete.sql`
+3. `migration_payments_maps.sql`
+4. `migration_paymongo.sql`
+5. `migration_new_features.sql`
+6. `migration_demo_payments_notifications.sql`
+7. `migration_contact_messages.sql`
+8. `migration_user_city.sql`
 
-The fourth migration adds cancellation reasons, client start acknowledgements, announcement titles, saved addresses, favorite workers, and worker portfolios. The final migration adds the demo-only payment status and actionable-notification URL. The migrations are intended for MySQL/MariaDB versions supporting `ADD COLUMN IF NOT EXISTS`; verify the database backup and schema before running them on production.
+The fifth migration adds cancellation reasons, client start acknowledgements, announcement titles, saved addresses, favorite workers, and worker portfolios. The sixth migration adds the demo-only payment status and actionable-notification URL. The seventh migration creates the inbox table used by the public contact form and administrator inbox. The eighth migration adds the structured City / Municipality used for location-aware cleaner matching. These migrations preserve existing data; verify the database backup and schema before running them on production. The chat-message deletion migration adds a soft-delete marker; it does not run automatically.
 
 ### Local wallet-payment simulation
 
@@ -123,7 +128,7 @@ If the application detects that `users.worker_approved` is missing, it shows a s
 
 Booking before/after photos are served only to the booking's client, currently assigned worker, and administrators. Keep the access-control rules in `uploads/.htaccess` and use `photo.php` to display booking photos.
 
-Clients can self-cancel any active booking (`pending`, `assigned`, `in_progress`, or `awaiting_verification`) from its details page; the status-conditional update prevents cancelling a booking that has already completed or changed state. The worker is notified and must stop work. This also applies to GCash/Maya bookings, but ChoreHive does not automatically refund online payments. If a client pays through an already-open checkout after cancelling, the payment is recorded against the cancelled booking and the client must contact support to request a refund. Workers can decline only unpaid cash assignments.
+Clients can self-cancel any active booking (`pending`, `assigned`, `in_progress`, or `awaiting_verification`) from its details page; the status-conditional update prevents cancelling a booking that has already completed or changed state. The worker is notified and must stop work. This also applies to GCash/Maya bookings, but ChoreHive does not automatically issue or process online refunds. A worker cannot decline an online-paid booking in the worker UI; an administrator must handle reassignment and any refund request outside the automated workflow. Customers should contact support for a refund request. If a client pays through an already-open checkout after cancelling, the payment is recorded against the cancelled booking and is not automatically refunded. Workers can decline only unpaid cash assignments.
 
 ## UI refinement
 
@@ -166,7 +171,7 @@ ChoreHive uses Vercel's community PHP runtime configured in `vercel.json`; PHP i
 
 Vercel functions do not have durable local files or shared file sessions. The app automatically selects database sessions and database-backed images when `VERCEL` is present (override with `SESSION_DRIVER` and `MEDIA_STORAGE` only if needed). Before deploying, apply `migration_vercel_storage.sql` to the already-created TiDB database; a fresh database bootstrap already includes the `app_sessions` and `media_files` tables. This migration only creates two new tables and preserves existing data. `media_files` stores images in TiDB, including private booking photos served only through the authorization checks in `photo.php`. Images therefore count toward the TiDB storage quota; keep the 3 MB upload limit and review storage usage as the app grows.
 
-Use `APP_URL` for the public site origin when configuring email or PayMongo return/webhook URLs. Configure SMTP before relying on email workflows; the local email-log fallback is not persistent on Vercel. Keep PayMongo credentials only in Vercel environment variables, and leave payment demo mode disabled. `.vercelignore` excludes local secrets, uploads, SQL files, migrations, and development-only scripts. This deployment setup still requires a successful Vercel build plus live smoke tests for TLS database connectivity, sessions, uploads, and protected photos before the preview can be considered working.
+Use `APP_URL` for the public site origin when configuring email or PayMongo return/webhook URLs. Configure SMTP before relying on email workflows; the local email-log fallback is not persistent on Vercel. Keep PayMongo credentials only in Vercel environment variables, and leave payment demo mode disabled. `.vercelignore` excludes local secrets, uploads, SQL files, migrations, and development-only scripts. Before deploying the contact inbox changes, run `migration_contact_messages.sql` once in TiDB SQL Editor so the public contact form can save messages and admins can view them at `/admin/contact.php`. This deployment setup still requires a successful Vercel build plus live smoke tests for TLS database connectivity, sessions, uploads, and protected photos before the preview can be considered working.
 
 
 ## Marketplace discovery and chat workflow
@@ -175,7 +180,7 @@ Customer dashboards prioritize worker discovery. Customers can browse cleaner pr
 
 Cash is confirmed only after the worker marks the job complete and the customer has reviewed the work and physically paid the worker. GCash/Maya checkout happens before work starts through PayMongo; the server prevents workers from starting an online booking while it remains unpaid. A receipt with the PayMongo/ChoreHive reference can be printed or saved to PNG. Interactive map pins use Leaflet and OpenStreetMap tiles; the customer must type the full address manually because the map never overwrites the address text. A pin is optional, and workers/admins can open it in a map or directions app.
 
-The chat UI refreshes messages by polling every three seconds (near-real-time polling, not WebSockets). Worker presence is updated from authenticated worker pages and chat activity. Admins have a marketplace overview on the admin dashboard, can see worker availability/activity in **Users & Badges**, review conversation activity, and open a read-only conversation transcript for support. Opening a transcript is recorded in the audit log; admins cannot send messages as a customer or worker from that screen.
+The chat UI refreshes messages by polling every three seconds (near-real-time polling, not WebSockets). Worker presence is updated from authenticated worker pages and chat activity. Clients and workers can delete their own sent messages; administrators can remove a message from the audited conversation-review screen. Deleted content is replaced with a “Message deleted” marker for participants and administrators, and deletion actions are audited. The database needs `migration_chat_message_delete.sql` before this feature can be used.
 
 ### Database update for existing installations
 

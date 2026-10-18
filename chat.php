@@ -13,7 +13,137 @@ $title='Messages';require 'layout.php';
 <?php else: $pa=avatar_url($partner,ch_base()); ?>
 <div class="chat-shell" id="chatApp" data-partner="<?= (int)$partner['id'] ?>" data-current="<?= (int)$u['id'] ?>" data-role="<?= e($u['role']) ?>"><aside class="chat-sidebar"><a class="chat-back" href="chat.php">← All conversations</a><div class="chat-person-card"><?php if($pa): ?><img src="<?= e($pa) ?>" alt="" class="chat-person-avatar"><?php else: ?><span class="chat-person-avatar conversation-initials"><?= e(initials($partner['name'])) ?></span><?php endif; ?><h3><?= e($partner['name']) ?></h3><span class="chat-role-label"><?= $u['role']==='client'?'ChoreHive cleaner':'Customer' ?></span><?php if($partner['role']==='worker'): ?><a class="market-text-link" href="client/worker.php?id=<?= (int)$partner['id'] ?>">View cleaner profile ↗</a><?php if($u['role']==='client' && (int)$partner['active_jobs']===0): ?><a class="btn chat-hire-button" href="client/book.php?worker_id=<?= (int)$partner['id'] ?>">Hire this cleaner →</a><?php elseif($u['role']==='client'): ?><span class="chat-busy-note">Currently booked · check back later</span><?php endif; ?><?php endif; ?></div><div class="chat-trust-note"><span>✦</span><p><b>Good to know</b><br>Discuss the tasks and timing here. Your booking is not created until you complete the hire flow.</p></div></aside><section class="chat-main"><header class="chat-header"><div><b><?= e($partner['name']) ?></b><small id="chatPresence">ChoreHive conversation</small></div><span class="chat-lock">🔒 Private chat</span></header><div class="chat-messages" id="chatMessages" aria-live="polite"><div class="chat-loading">Loading conversation…</div></div><form class="chat-compose" id="chatForm"><textarea id="chatInput" maxlength="2000" rows="1" placeholder="Write a message…" aria-label="Message" required></textarea><button class="btn" type="submit" id="sendMessage">Send ↑</button><small>Keep your messages respectful and never share passwords or sensitive payment details.</small></form></section></div>
 <script>
-(()=>{const app=document.getElementById('chatApp');if(!app)return;const partner=app.dataset.partner,box=document.getElementById('chatMessages'),form=document.getElementById('chatForm'),input=document.getElementById('chatInput'),send=document.getElementById('sendMessage');let newest=0,loading=false;const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));async function refresh(){if(loading)return;loading=true;try{const r=await fetch('chat_api.php?user_id='+encodeURIComponent(partner)+'&after='+newest,{headers:{'Accept':'application/json'},cache:'no-store'});const d=await r.json();if(!r.ok||!d.ok)throw Error(d.error||'Unable to load messages');if(d.messages.length){const nearBottom=box.scrollHeight-box.scrollTop-box.clientHeight<120;const empty=box.querySelector('.chat-loading');if(empty)box.innerHTML='';d.messages.forEach(m=>{newest=Math.max(newest,+m.id);const el=document.createElement('div');el.className='message-row '+(m.mine?'mine':'theirs');el.innerHTML='<div class="message-bubble">'+esc(m.message).replace(/\r?\n/g,'<br>')+'</div><small>'+esc(m.time)+(m.mine?' · You':' · '+esc(m.sender))+'</small>';box.appendChild(el);});if(nearBottom||d.messages.some(m=>m.mine))box.scrollTop=box.scrollHeight;}document.getElementById('chatPresence').textContent=d.partner_online?'Active recently':'ChoreHive conversation';}catch(e){if(!box.querySelector('.chat-error'))box.insertAdjacentHTML('beforeend','<p class="chat-error">Messages could not refresh. Check your connection.</p>');}finally{loading=false;}}form.addEventListener('submit',async e=>{e.preventDefault();const message=input.value.trim();if(!message)return;send.disabled=true;try{const body=new URLSearchParams({csrf_token:'<?= e(csrf_token()) ?>',user_id:partner,message});const r=await fetch('chat_api.php',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded','Accept':'application/json'},body});const d=await r.json();if(!r.ok||!d.ok)throw Error(d.error||'Message could not be sent');input.value='';await refresh();box.scrollTop=box.scrollHeight;}catch(e){alert(e.message||'Message could not be sent. Please try again.');}finally{send.disabled=false;input.focus();}});input.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();form.requestSubmit();}});refresh();const poller=setInterval(refresh,3000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)refresh();});window.addEventListener('beforeunload',()=>clearInterval(poller));})();
+(() => {
+  const app = document.getElementById('chatApp');
+  if (!app) return;
+  const partner = app.dataset.partner;
+  const box = document.getElementById('chatMessages');
+  const form = document.getElementById('chatForm');
+  const input = document.getElementById('chatInput');
+  const send = document.getElementById('sendMessage');
+  let newest = 0;
+  let loading = false;
+  const esc = value => String(value).replace(/[&<>"']/g, char => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[char]));
+  const showDeleted = id => {
+    const row = box.querySelector(`[data-message-id="${id}"]`);
+    if (!row) return;
+    const bubble = row.querySelector('.message-bubble');
+    if (bubble) {
+      bubble.textContent = 'Message deleted';
+      bubble.classList.add('message-deleted');
+    }
+    row.querySelector('.message-delete')?.remove();
+  };
+  async function refresh() {
+    if (loading) return;
+    loading = true;
+    try {
+      const response = await fetch('chat_api.php?user_id=' + encodeURIComponent(partner) + '&after=' + newest, {
+        headers: { 'Accept': 'application/json' }, cache: 'no-store'
+      });
+      const data = await response.json();
+      if (!response.ok || !data.ok) throw Error(data.error || 'Unable to load messages');
+      box.querySelector('.chat-error')?.remove();
+      const nearBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 120;
+      if (box.querySelector('.chat-loading')) box.innerHTML = '';
+      data.messages.forEach(message => {
+        newest = Math.max(newest, Number(message.id));
+        const row = document.createElement('div');
+        row.className = 'message-row ' + (message.mine ? 'mine' : 'theirs');
+        row.dataset.messageId = message.id;
+        row.innerHTML = '<div class="message-bubble' + (message.is_deleted ? ' message-deleted' : '') + '">' +
+          (message.is_deleted ? 'Message deleted' : esc(message.message).replace(/\r?\n/g, '<br>')) +
+          '</div><small>' + esc(message.time) + (message.mine ? ' · You' : ' · ' + esc(message.sender)) + '</small>';
+        if (message.mine && !message.is_deleted) {
+          const remove = document.createElement('button');
+          remove.type = 'button';
+          remove.className = 'message-delete';
+          remove.dataset.messageId = message.id;
+          remove.textContent = 'Delete';
+          remove.setAttribute('aria-label', 'Delete your message');
+          row.append(remove);
+        }
+        box.append(row);
+      });
+      (data.deleted_ids || []).forEach(showDeleted);
+      if (nearBottom || data.messages.some(message => message.mine)) box.scrollTop = box.scrollHeight;
+      document.getElementById('chatPresence').textContent = data.partner_online ? 'Active recently' : 'ChoreHive conversation';
+    } catch (error) {
+      let notice = box.querySelector('.chat-error');
+      if (!notice) {
+        notice = document.createElement('p');
+        notice.className = 'chat-error';
+        box.append(notice);
+      }
+      notice.textContent = error.message || 'Messages could not refresh. Check your connection.';
+    } finally {
+      loading = false;
+    }
+  }
+  form.addEventListener('submit', async event => {
+    event.preventDefault();
+    const message = input.value.trim();
+    if (!message) return;
+    send.disabled = true;
+    try {
+      const body = new URLSearchParams({ csrf_token: '<?= e(csrf_token()) ?>', user_id: partner, message });
+      const response = await fetch('chat_api.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Accept': 'application/json' },
+        body
+      });
+      const data = await response.json();
+      if (!response.ok || !data.ok) throw Error(data.error || 'Message could not be sent');
+      input.value = '';
+      await refresh();
+      box.scrollTop = box.scrollHeight;
+    } catch (error) {
+      alert(error.message || 'Message could not be sent. Please try again.');
+    } finally {
+      send.disabled = false;
+      input.focus();
+    }
+  });
+  box.addEventListener('click', async event => {
+    const remove = event.target.closest('.message-delete');
+    if (!remove) return;
+    const messageId = remove.dataset.messageId;
+    const okToDelete = await chConfirm({ title: 'Delete message', message: 'Delete this message for both people in the conversation? This cannot be undone.', yes: 'Yes, delete' });
+    if (!okToDelete) return;
+    remove.disabled = true;
+    try {
+      const body = new URLSearchParams({
+        csrf_token: '<?= e(csrf_token()) ?>',
+        user_id: partner,
+        delete_message: messageId
+      });
+      const response = await fetch('chat_api.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Accept': 'application/json' },
+        body
+      });
+      const data = await response.json();
+      if (!response.ok || !data.ok) throw Error(data.error || 'Message could not be deleted');
+      showDeleted(messageId);
+      refresh();
+    } catch (error) {
+      remove.disabled = false;
+      alert(error.message || 'Message could not be deleted. Please try again.');
+    }
+  });
+  input.addEventListener('keydown', event => {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      form.requestSubmit();
+    }
+  });
+  refresh();
+  const poller = setInterval(refresh, 3000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
+  window.addEventListener('beforeunload', () => clearInterval(poller));
+})();
 </script>
 <?php endif; ?>
 <?php require 'footer.php'; ?>

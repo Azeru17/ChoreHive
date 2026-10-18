@@ -23,23 +23,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (isset($_POST['approve_worker']) ||
 }
 
 /* ---------- CREATE ---------- */
+// Admin creation disabled - users register themselves
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create'])) {
     verify_csrf();
-    $name  = v_str('name', 100, true, 'Name');
-    $email = v_email();
-    $role  = in_array($_POST['role'] ?? '', ['client','worker','admin'], true) ? $_POST['role'] : fail('Invalid role.');
-    if (strlen($_POST['password'] ?? '') < 8) fail('Password must be at least 8 characters.');
-    $chk = $conn->query("SELECT id FROM users WHERE email='" . $conn->real_escape_string($email) . "'")->fetch_assoc();
-    if ($chk) fail('That email is already registered.');
-    $pass = password_hash($_POST['password'], PASSWORD_DEFAULT);
-    $stmt = $conn->prepare("INSERT INTO users (name,email,password,role) VALUES (?,?,?,?)");
-    $stmt->bind_param('ssss', $name, $email, $pass, $role);
-    $stmt->execute();
-    $new_id = $conn->insert_id;
-    notify_and_email($new_id, "Welcome to ChoreHive, $name! Your account was created by an administrator.", 'Account created');
-    audit_log('user_created', "Admin {$u['name']} created $role account for $name <$email>");
-    flash('User created.');
-    header('Location: users.php'); exit;
+    flash('User creation is disabled. Users can register through the registration page.', 'error');
+    header('Location: users.php');
+    exit;
 }
 
 /* ---------- UPDATE ---------- */
@@ -82,13 +71,45 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete'])) {
     verify_csrf();
     $uid = v_int('delete', 1, PHP_INT_MAX, 'User');
     if ($uid === $u['id']) fail('You cannot delete your own account.');
-    $target = $conn->query("SELECT name FROM users WHERE id=$uid")->fetch_assoc();
+    $target = $conn->query("SELECT name, role FROM users WHERE id=$uid")->fetch_assoc();
     if (!$target) fail('User not found.');
+    
+    // Handle foreign key constraints by nullifying/reassigning related records
+    // For bookings where worker is deleted, unassign them (set worker_id to NULL) if pending/assigned
+    $conn->query("UPDATE bookings SET worker_id=NULL WHERE worker_id=$uid");
+    // For bookings where client is deleted, we need to be careful - but admin deleting is destructive
+    // Check if user has client bookings
+    $clientBookings = $conn->query("SELECT COUNT(*) c FROM bookings WHERE client_id=$uid")->fetch_assoc()['c'];
+    if ($clientBookings > 0) {
+        // Delete bookings with photos/checklist/feedback (cascades) and notify? But easier: delete_booking_record for each
+        $res = $conn->query("SELECT id FROM bookings WHERE client_id=$uid");
+        while ($b = $res->fetch_assoc()) {
+            delete_booking_record($b['id']);
+        }
+    }
+    
+    // Clean up other related data
+    $conn->query("DELETE FROM chat_threads WHERE client_id=$uid OR worker_id=$uid");
+    $conn->query("DELETE FROM saved_addresses WHERE client_id=$uid");
+    $conn->query("DELETE FROM worker_portfolio WHERE worker_id=$uid");
+    $conn->query("DELETE FROM badges WHERE worker_id=$uid");
+    $conn->query("DELETE FROM notifications WHERE user_id=$uid");
+    $conn->query("DELETE FROM worker_presence WHERE worker_id=$uid");
+    $conn->query("DELETE FROM password_resets WHERE user_id=$uid");
+    // Skip favorites if table doesn't exist
+    if ($conn->query("SELECT 1 FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name='favorites'")->num_rows > 0) {
+        $conn->query("DELETE FROM favorites WHERE client_id=$uid OR worker_id=$uid");
+    }
+    
+    // Return ID to freed pool for reuse
+    $role = $target['role'] ?? 'client';
+    $conn->query("INSERT IGNORE INTO role_id_freed (role, freed_id) VALUES ('$role', $uid)");
+    
     $stmt = $conn->prepare("DELETE FROM users WHERE id=?");
     $stmt->bind_param('i', $uid);
     $stmt->execute();
     audit_log('user_deleted', "deleted user #$uid ({$target['name']})");
-    flash('User deleted.', 'error');
+    flash('User deleted successfully.');
     header('Location: users.php'); exit;
 }
 
@@ -139,7 +160,7 @@ $badges = $conn->query("SELECT bg.*, u.name worker FROM badges bg JOIN users u O
 ?>
 <h1>Manage Users</h1>
 
-<div class="card">
+<div class="card" style="display:none;">
   <h2><?= $edit ? '✏️ Edit user #' . $edit['id'] : '➕ Create user' ?></h2>
   <form method="post" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:0 14px;">
     <?= csrf_field() ?>
@@ -164,6 +185,7 @@ $badges = $conn->query("SELECT bg.*, u.name worker FROM badges bg JOIN users u O
 
 <div class="card">
   <h2>All Users</h2>
+  <p class="muted">Users register themselves through the registration page. Admins can view and delete accounts.</p>
   <div class="table-wrap">
   <table>
     <tr><th>ID</th><th>Name</th><th>Email</th><th>Role</th><th>Jobs</th><th>Marketplace status</th><th>Listing review</th><th>Actions</th></tr>
@@ -177,7 +199,7 @@ $badges = $conn->query("SELECT bg.*, u.name worker FROM badges bg JOIN users u O
         <td><?php if ($usr['role'] === 'worker'): $isOnline = !empty($usr['worker_last_seen']) && strtotime($usr['worker_last_seen']) >= time()-300; $isBusy = (int)$usr['active_worker_jobs'] > 0; ?><span class="availability-pill <?= $isBusy ? 'busy' : 'available' ?>"><i></i><?= $isBusy ? 'Busy' : 'Available' ?></span><small class="admin-worker-presence <?= $isOnline ? 'is-online' : '' ?>"><?= $isOnline ? 'Recently active' : 'Offline' ?></small><?php else: ?><span class="muted">—</span><?php endif; ?></td>
         <td><?php if ($usr['role'] === 'worker'): ?>
           <span class="badge <?= (int)$usr['worker_approved'] ? 'ok' : 'warn' ?>"><?= (int)$usr['worker_approved'] ? 'Listed' : 'Pending review' ?></span>
-          <form method="post" style="margin-top:6px;" onsubmit="return confirm('<?= (int)$usr['worker_approved'] ? 'Remove this profile from public worker listings?' : 'Approve this profile for marketplace listing?' ?>');">
+          <form method="post" style="margin-top:6px;" data-confirm="<?= (int)$usr['worker_approved'] ? 'Remove this profile from public worker listings?' : 'Approve this profile for marketplace listing?' ?>" data-confirm-title="Marketplace listing">
             <?= csrf_field() ?>
             <?php if ((int)$usr['worker_approved']): ?>
               <button name="revoke_worker" value="<?= (int)$usr['id'] ?>" class="btn btn-sm btn-outline">Revoke listing</button>
@@ -188,9 +210,9 @@ $badges = $conn->query("SELECT bg.*, u.name worker FROM badges bg JOIN users u O
         <?php else: ?><span class="muted">—</span><?php endif; ?></td>
         <td>
           <div class="actions">
-            <a class="btn btn-sm btn-sec" href="?edit=<?= $usr['id'] ?>">Edit</a>
+            <a class="btn btn-sm btn-sec" href="user_view.php?id=<?= $usr['id'] ?>">View</a>
             <?php if ($usr['id'] != $u['id']): ?>
-            <form method="post" onsubmit="return confirm('Delete <?= e($usr['name']) ?>? This also removes their bookings, photos and feedback.')">
+            <form method="post" data-confirm="Delete <?= e($usr['name']) ?>? This also removes their bookings, photos and feedback." data-confirm-title="Delete user" data-confirm-yes="Yes, delete">
               <?= csrf_field() ?><button name="delete" value="<?= $usr['id'] ?>" class="btn btn-sm btn-danger">Delete</button>
             </form>
             <?php endif; ?>

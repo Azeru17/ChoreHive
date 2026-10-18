@@ -15,6 +15,7 @@ CREATE TABLE users (
   worker_approved TINYINT(1) NOT NULL DEFAULT 0,
   phone VARCHAR(30),
   address VARCHAR(255),
+  city VARCHAR(100),
   bio TEXT,
   avatar VARCHAR(255) NULL,
   is_new TINYINT(1) DEFAULT 1,
@@ -102,6 +103,18 @@ CREATE TABLE notifications (
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
+CREATE TABLE contact_messages (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(100) NOT NULL,
+  email VARCHAR(120) NOT NULL,
+  message TEXT NOT NULL,
+  is_read TINYINT(1) NOT NULL DEFAULT 0,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  read_at DATETIME NULL,
+  INDEX idx_contact_messages_unread_created (is_read, created_at),
+  INDEX idx_contact_messages_created (created_at)
+);
+
 CREATE TABLE audit_log (
   id INT AUTO_INCREMENT PRIMARY KEY,
   user_id INT NULL,
@@ -181,6 +194,7 @@ CREATE TABLE chat_messages (
   thread_id INT NOT NULL,
   sender_id INT NOT NULL,
   message TEXT NOT NULL,
+  is_deleted TINYINT(1) NOT NULL DEFAULT 0,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   INDEX idx_thread_message (thread_id, id),
   FOREIGN KEY (thread_id) REFERENCES chat_threads(id) ON DELETE CASCADE,
@@ -207,3 +221,31 @@ INSERT INTO services (name,description,base_price,duration_hours) VALUES
 ('Deep Cleaning','Thorough cleaning of kitchens, bathrooms, and hard-to-reach areas.',700,4),
 ('Move-in/Move-out Cleaning','Full unit cleaning for tenants and landlords.',900,5),
 ('Laundry & Ironing','Washing, drying, folding, and ironing.',300,3);
+
+-- Per-role ID allocation. users.id is a shared AUTO_INCREMENT, but the app hands
+-- out role-scoped IDs (see get_next_role_id() in config.php) so that client,
+-- worker and admin IDs read predictably. Both tables are REQUIRED: registration
+-- reads them on every new signup.
+CREATE TABLE IF NOT EXISTS role_id_counters (
+  role ENUM('client','worker','admin') NOT NULL PRIMARY KEY,
+  next_id INT UNSIGNED NOT NULL DEFAULT 1
+);
+
+CREATE TABLE IF NOT EXISTS role_id_freed (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  role ENUM('client','worker','admin') NOT NULL,
+  freed_id INT UNSIGNED NOT NULL,
+  UNIQUE KEY uq_role_id_freed (role, freed_id)
+);
+
+-- Start each counter above the highest ID already used for that role, so the
+-- first registration cannot collide with a pre-seeded account.
+INSERT INTO role_id_counters (role, next_id)
+SELECT 'client', COALESCE(MAX(id), 0) + 1 FROM users WHERE role = 'client'
+ON DUPLICATE KEY UPDATE next_id = GREATEST(next_id, VALUES(next_id));
+INSERT INTO role_id_counters (role, next_id)
+SELECT 'worker', COALESCE(MAX(id), 0) + 1 FROM users WHERE role = 'worker'
+ON DUPLICATE KEY UPDATE next_id = GREATEST(next_id, VALUES(next_id));
+INSERT INTO role_id_counters (role, next_id)
+SELECT 'admin', COALESCE(MAX(id), 0) + 1 FROM users WHERE role = 'admin'
+ON DUPLICATE KEY UPDATE next_id = GREATEST(next_id, VALUES(next_id));

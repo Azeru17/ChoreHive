@@ -113,7 +113,7 @@ $unread = count(array_filter($items, fn($n) => $n['unread']));
   </div>
   <div class="d-flex gap-2">
     <form method="post" class="m-0"><?= csrf_field() ?><button class="btn btn-light btn-sm" name="action" value="read_all"><i class="bi bi-check2-all"></i> Mark all read</button></form>
-    <form method="post" class="m-0" onsubmit="return confirm('Clear all notifications?');"><?= csrf_field() ?><button class="btn btn-outline-light btn-sm" name="action" value="clear"><i class="bi bi-trash"></i> Clear all</button></form>
+    <form method="post" class="m-0" data-confirm="Clear all notifications?" data-confirm-title="Clear notifications" data-confirm-yes="Yes, clear all"><?= csrf_field() ?><button class="btn btn-outline-light btn-sm" name="action" value="clear"><i class="bi bi-trash"></i> Clear all</button></form>
   </div>
 </div>
 

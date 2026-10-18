@@ -29,7 +29,7 @@ $res = $conn->query("SELECT * FROM audit_log ORDER BY created_at DESC LIMIT $per
       <b>Clear the audit log</b>
       <p class="muted" style="margin:3px 0 0;">Removes all <?= (int)$total ?> entries to keep the log tidy. The clearing action itself is recorded.</p>
     </div>
-    <form method="post" onsubmit="return confirm('Clear the entire audit log?\n\nAll <?= (int)$total ?> entries will be permanently removed.');">
+    <form method="post" data-confirm="Clear the entire audit log?\n\nAll <?= (int)$total ?> entries will be permanently removed." data-confirm-title="Clear audit log" data-confirm-yes="Yes, clear log">
       <?= csrf_field() ?>
       <button class="btn btn-sm btn-danger" name="clear_log" value="1">🧹 Clear audit log</button>
     </form>

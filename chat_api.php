@@ -61,29 +61,48 @@ if ($u['role'] === 'worker') {
 }
 
 if ($isPost) {
-    $message = trim((string)($_POST['message'] ?? ''));
-    if ($message === '' || mb_strlen($message) > 2000) {
-        chat_json(422, ['ok' => false, 'error' => 'Messages must be between 1 and 2,000 characters.']);
-    }
-    $insert = $conn->prepare('INSERT INTO chat_messages (thread_id,sender_id,message) VALUES (?,?,?)');
-    $insert->bind_param('iis', $threadId, $u['id'], $message);
-    if (!$insert->execute()) {
-        chat_json(500, ['ok' => false, 'error' => 'Message could not be saved.']);
-    }
-    $update = $conn->prepare('UPDATE chat_threads SET updated_at=NOW() WHERE id=?');
-    $update->bind_param('i', $threadId);
-    $update->execute();
+    if (isset($_POST['delete_message'])) {
+        $messageId = filter_var($_POST['delete_message'], FILTER_VALIDATE_INT);
+        if ($messageId === false || $messageId < 1) {
+            chat_json(422, ['ok' => false, 'error' => 'Choose a valid message to delete.']);
+        }
+        $delete = $conn->prepare("UPDATE chat_messages SET message='Message deleted',is_deleted=1 WHERE id=? AND thread_id=? AND sender_id=? AND is_deleted=0");
+        $delete->bind_param('iii', $messageId, $threadId, $u['id']);
+        if (!$delete->execute()) {
+            chat_json(500, ['ok' => false, 'error' => 'Message could not be deleted.']);
+        }
+        if ($delete->affected_rows !== 1) {
+            chat_json(404, ['ok' => false, 'error' => 'That message is unavailable or was not sent by you.']);
+        }
+        $update = $conn->prepare('UPDATE chat_threads SET updated_at=NOW() WHERE id=?');
+        $update->bind_param('i', $threadId);
+        $update->execute();
+        audit_log('chat_message_deleted', "{$u['role']} {$u['name']} deleted message #$messageId from conversation #$threadId");
+    } else {
+        $message = trim((string)($_POST['message'] ?? ''));
+        if ($message === '' || mb_strlen($message) > 2000) {
+            chat_json(422, ['ok' => false, 'error' => 'Messages must be between 1 and 2,000 characters.']);
+        }
+        $insert = $conn->prepare('INSERT INTO chat_messages (thread_id,sender_id,message) VALUES (?,?,?)');
+        $insert->bind_param('iis', $threadId, $u['id'], $message);
+        if (!$insert->execute()) {
+            chat_json(500, ['ok' => false, 'error' => 'Message could not be saved.']);
+        }
+        $update = $conn->prepare('UPDATE chat_threads SET updated_at=NOW() WHERE id=?');
+        $update->bind_param('i', $threadId);
+        $update->execute();
 
-    $short = mb_strimwidth($message, 0, 120, '…');
-    $notice = 'New message from ' . $u['name'] . ': ' . $short;
-    $actionUrl = 'chat.php?user_id=' . (int)$u['id'];
-    $notify = $conn->prepare('INSERT INTO notifications (user_id,message,action_url) VALUES (?,?,?)');
-    $notify->bind_param('iss', $partnerId, $notice, $actionUrl);
-    $notify->execute();
+        $short = mb_strimwidth($message, 0, 120, '…');
+        $notice = 'New message from ' . $u['name'] . ': ' . $short;
+        $actionUrl = 'chat.php?user_id=' . (int)$u['id'];
+        $notify = $conn->prepare('INSERT INTO notifications (user_id,message,action_url) VALUES (?,?,?)');
+        $notify->bind_param('iss', $partnerId, $notice, $actionUrl);
+        $notify->execute();
+    }
 }
 
 $after = max(0, (int)($_GET['after'] ?? 0));
-$messageStmt = $conn->prepare('SELECT m.id,m.sender_id,m.message,m.created_at,s.name sender FROM chat_messages m JOIN users s ON s.id=m.sender_id WHERE m.thread_id=? AND m.id>? ORDER BY m.id ASC LIMIT 100');
+$messageStmt = $conn->prepare('SELECT m.id,m.sender_id,m.message,m.created_at,m.is_deleted,s.name sender FROM chat_messages m JOIN users s ON s.id=m.sender_id WHERE m.thread_id=? AND m.id>? ORDER BY m.id ASC LIMIT 100');
 $messageStmt->bind_param('ii', $threadId, $after);
 $messageStmt->execute();
 $messageRows = $messageStmt->get_result();
@@ -94,10 +113,17 @@ while ($row = $messageRows->fetch_assoc()) {
         'sender_id' => (int)$row['sender_id'],
         'sender' => $row['sender'],
         'message' => $row['message'],
+        'is_deleted' => (bool)$row['is_deleted'],
         'time' => date('M j, g:i A', strtotime($row['created_at'])),
         'mine' => (int)$row['sender_id'] === (int)$u['id'],
     ];
 }
+$deletedStmt = $conn->prepare('SELECT id FROM chat_messages WHERE thread_id=? AND is_deleted=1');
+$deletedStmt->bind_param('i', $threadId);
+$deletedStmt->execute();
+$deletedRows = $deletedStmt->get_result();
+$deletedIds = [];
+while ($row = $deletedRows->fetch_assoc()) $deletedIds[] = (int)$row['id'];
 
 $presenceStmt = $conn->prepare('SELECT last_seen FROM worker_presence WHERE worker_id=?');
 $presenceStmt->bind_param('i', $workerId);
@@ -105,4 +131,4 @@ $presenceStmt->execute();
 $presenceRow = $presenceStmt->get_result()->fetch_assoc();
 $partnerOnline = $presenceRow && strtotime($presenceRow['last_seen']) >= time() - 300;
 
-chat_json(200, ['ok' => true, 'messages' => $messages, 'partner_online' => (bool)$partnerOnline]);
+chat_json(200, ['ok' => true, 'messages' => $messages, 'deleted_ids' => $deletedIds, 'partner_online' => (bool)$partnerOnline]);

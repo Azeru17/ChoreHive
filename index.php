@@ -59,22 +59,82 @@ $base = ch_base();
   .btn-dark:hover {background:linear-gradient(180deg,#17427a,var(--navy-dark)) !important; transform:translateY(-2px); box-shadow:0 10px 24px rgba(23,66,122,.34);}
 
   /* Anchored sections */
-  [id] { scroll-margin-top:24px; }
+  [id] { scroll-margin-top:92px; }
   .hero { animation:rise .6s var(--ease) both; }
 
   /* Showcase tiles */
-  .photo-grid {column-count:2;column-gap:16px}
-  .photo-grid .shot {position:relative;display:block;width:100%;margin-top:16px;border-radius:var(--radius);overflow:hidden;cursor:pointer;box-shadow:var(--shadow);transition:transform var(--med) var(--ease), box-shadow var(--med) var(--ease);}
-  .photo-grid .shot:hover {transform:translateY(-5px); box-shadow:var(--shadow-lg);}
+  .photo-grid {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-auto-rows:220px;gap:16px;margin-top:16px}
+  .photo-grid .shot {position:relative;display:block;width:100%;height:100%;margin:0;border-radius:var(--radius);overflow:hidden;cursor:pointer;box-shadow:var(--shadow);transition:transform var(--med) var(--ease), box-shadow var(--med) var(--ease);}
+  .photo-grid .shot:hover {transform:translateY(-3px); box-shadow:var(--shadow-lg);}
   .photo-grid .shot > img {display:block;width:100%;height:100%;object-fit:cover;transition:transform .5s var(--ease);}
   .photo-grid .shot:hover > img {transform:scale(1.07);}
   .photo-grid .shot figcaption {position:absolute;left:0;right:0;bottom:0;padding:46px 18px 16px;color:#fff;
     background:linear-gradient(to top,rgba(15,45,85,.94) 18%,rgba(15,45,85,.55) 58%,rgba(15,45,85,0));}
   .photo-grid .shot figcaption b {display:block;font-size:1rem;letter-spacing:-.01em;text-shadow:0 1px 4px rgba(0,0,0,.45);}
   .photo-grid .shot figcaption span {display:block;margin-top:3px;font-size:.8rem;line-height:1.45;opacity:.92;}
-  @media (max-width:600px) {.photo-grid {column-count:1}}
-  dialog {border:0;padding:0;width:min(900px,90%);border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow-lg);animation:pop-in var(--med) var(--ease);}
-  dialog::backdrop {background:rgba(15,45,85,.82); -webkit-backdrop-filter:blur(4px); backdrop-filter:blur(4px);}
+  @media (max-width:700px) {.photo-grid {grid-template-columns:minmax(0,1fr);grid-auto-rows:210px;gap:12px}}
+  /* Showcase lightbox — the photo fills the card, caption overlaid on it */
+  #modal01 {
+    position:fixed; inset:0; width:100%; max-width:none;
+    height:100%; height:100dvh; max-height:none;
+    margin:0; padding:clamp(14px,4vw,44px); border:0; background:transparent;
+    overflow:hidden; cursor:zoom-out;
+    opacity:0; transition:opacity .26s var(--ease);
+  }
+  /* Only lay the dialog out while it is actually open — otherwise the
+     UA default `dialog:not([open]){display:none}` would be overridden and
+     a transparent full-screen layer would swallow every click. */
+  #modal01[open] { display:grid; place-items:center; }
+  #modal01.is-open { opacity:1; }
+  #modal01::backdrop { background:rgba(8,22,40,.82); -webkit-backdrop-filter:blur(10px) saturate(140%); backdrop-filter:blur(10px) saturate(140%); }
+
+  #modal01 .showcase-dialog-content {
+    position:relative; display:block;
+    width:auto; max-width:100%; max-height:100%; margin:0; overflow:hidden;
+    border-radius:18px; background:#0b2242; cursor:default;
+    box-shadow:0 30px 70px rgba(0,0,0,.45);
+    opacity:0; transform:translateY(16px) scale(.965);
+    transition:transform .34s var(--ease), opacity .26s var(--ease);
+  }
+  #modal01.is-open .showcase-dialog-content { opacity:1; transform:none; }
+
+  /* Image fills the whole card — no stage, no letterboxing. */
+  #img01 {
+    display:block; width:auto; height:auto;
+    max-width:100%; max-height:min(86vh,760px); object-fit:cover;
+  }
+
+  /* Caption sits on the photo over a soft scrim so it stays readable
+     on bright and dark images alike. */
+  #caption {
+    position:absolute; left:0; right:0; bottom:0; z-index:2; pointer-events:none;
+    padding:clamp(56px,13vh,104px) clamp(18px,3vw,28px) clamp(18px,3vw,26px);
+    background:linear-gradient(to top, rgba(6,18,34,.95) 0%, rgba(6,18,34,.78) 34%, rgba(6,18,34,.42) 64%, rgba(6,18,34,0) 100%);
+  }
+  #caption b { display:block; max-width:100%; font-size:clamp(1.05rem,2.4vw,1.35rem); font-weight:750; letter-spacing:-.02em; color:#fff; text-shadow:0 2px 12px rgba(0,0,0,.55); }
+  #caption span { display:block; max-width:52ch; margin-top:5px; font-size:clamp(.86rem,1.8vw,.98rem); line-height:1.5; color:rgba(255,255,255,.9); text-shadow:0 1px 10px rgba(0,0,0,.5); }
+
+  #modal01 .showcase-dialog-close {
+    position:absolute; top:6px; right:8px; z-index:4;
+    display:grid; place-items:center; width:42px; height:42px; min-height:42px; padding:0;
+    border:0; border-radius:8px; background:none; box-shadow:none;
+    color:#fff; font-size:2.1rem; line-height:1; font-weight:300; cursor:pointer;
+    text-shadow:0 1px 2px rgba(0,0,0,.75), 0 2px 12px rgba(0,0,0,.55);
+    transition:background .18s var(--ease), transform .18s var(--ease), opacity .18s var(--ease);
+  }
+  #modal01 .showcase-dialog-close:hover { background:rgba(255,255,255,.16); box-shadow:none; transform:scale(1.06); }
+  #modal01 .showcase-dialog-close:active { transform:scale(.92); }
+  body.showcase-open { overflow:hidden; }
+  @media (max-width:700px) {
+    #modal01 { padding:12px; }
+    #modal01 .showcase-dialog-content { border-radius:14px; }
+    #img01 { max-height:78vh; }
+    #modal01 .showcase-dialog-close { top:2px; right:4px; width:40px; height:40px; min-height:40px; }
+    /* Smaller photos on phones need a tighter scrim, or the gradient eats the image. */
+    #caption { padding:clamp(40px,9vh,72px) 16px 14px; }
+    #caption b { font-size:1rem; }
+    #caption span { font-size:.84rem; line-height:1.45; }
+  }
 
   .t1{background:linear-gradient(135deg,#17427a,#0f2d55)} .t2{background:linear-gradient(135deg,#e0aa33,#c1861a)}
   .t3{background:linear-gradient(135deg,#2a5a9e,#17427a)} .t4{background:linear-gradient(135deg,#0f2d55,#17427a)}
@@ -109,94 +169,86 @@ $base = ch_base();
 </head>
 <body>
 
-<!-- Sidebar/menu -->
-<nav class="w3-sidebar w3-collapse w3-top w3-large w3-padding" style="z-index:3;width:300px;font-weight:bold;" id="mySidebar"><br>
-  <a href="javascript:void(0)" onclick="w3_close()" class="w3-button w3-hide-large w3-display-topleft" style="width:100%;font-size:22px">Close Menu</a>
-  <div class="w3-container">
-    <h3 class="w3-padding-64" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-      <img src="<?= $base ?>/assets/logo.png" alt="ChoreHive logo" style="width:54px;height:54px;border-radius:50%;box-shadow:0 0 0 2px rgba(224,170,51,.55);">
-      <span><b>Chore<span class="honey">Hive</span></b><br><span style="font-size:.6em;font-weight:400;color:var(--ink);opacity:.7;">Cleaning you can verify.</span></span>
-    </h3>
-  </div>
-  <div class="w3-bar-block">
-    <a href="<?= $base ?>/index.php" class="w3-bar-item w3-button">Home</a>
-    <a href="#showcase" onclick="w3_close()" class="w3-bar-item w3-button">Showcase</a>
-    <a href="#services" onclick="w3_close()" class="w3-bar-item w3-button">Services</a>
-    <a href="#workers" onclick="w3_close()" class="w3-bar-item w3-button">Our Workers</a>
-    <a href="#packages" onclick="w3_close()" class="w3-bar-item w3-button">Packages</a>
-    <a href="#contact" onclick="w3_close()" class="w3-bar-item w3-button">Contact</a>
+<!-- Shared site header (matches the in-app navigation) -->
+<header class="site-header">
+  <a class="site-brand" href="<?= $base ?>/index.php">
+    <img src="<?= $base ?>/assets/logo.png" alt="ChoreHive logo">
+    <span>ChoreHive</span>
+  </a>
+  <nav class="site-nav" id="siteNav" aria-label="Main navigation">
+    <a href="#showcase">Showcase</a>
+    <a href="#services">Services</a>
+    <a href="#workers">Our Workers</a>
+    <a href="#packages">Packages</a>
+    <a href="#contact">Contact</a>
+  </nav>
+  <div class="site-actions">
     <?php if ($u): ?>
-      <a href="<?= $base ?>/<?= e($u['role']) ?>/dashboard.php" onclick="w3_close()" class="w3-bar-item w3-button bg-honey" style="margin-top:12px;">My Dashboard →</a>
+      <a class="btn-honey" href="<?= $base ?>/<?= e($u['role']) ?>/dashboard.php">My Dashboard</a>
     <?php else: ?>
-      <a href="<?= $base ?>/register.php" onclick="w3_close()" class="w3-bar-item w3-button bg-honey" style="margin-top:12px;">Get Started — Free</a>
-      <a href="<?= $base ?>/login.php" onclick="w3_close()" class="w3-bar-item w3-button">Log In</a>
+      <a class="btn-dark" href="<?= $base ?>/login.php">Log In</a>
+      <a class="btn-honey" href="<?= $base ?>/register.php">Get Started</a>
     <?php endif; ?>
+    <button class="site-burger" id="siteBurger" type="button" aria-label="Toggle navigation menu" aria-controls="siteNav" aria-expanded="false">&#9776;</button>
   </div>
-</nav>
-
-<!-- Top menu on small screens -->
-<header class="w3-container w3-top w3-hide-large w3-xlarge w3-padding" style="background:var(--card);color:var(--navy);border-bottom:1px solid var(--line);">
-  <a href="javascript:void(0)" class="w3-button w3-margin-right" style="color:var(--navy);" onclick="w3_open()">☰</a>
-  <img src="<?= $base ?>/assets/logo.png" alt="ChoreHive logo" style="width:38px;height:38px;border-radius:50%;box-shadow:0 0 0 2px rgba(224,170,51,.55);vertical-align:middle;">
-  <span style="vertical-align:middle;">Chore<span class="honey">Hive</span></span>
 </header>
 
-<!-- Overlay effect when opening sidebar on small screens -->
-<div class="w3-overlay w3-hide-large" onclick="w3_close()" style="cursor:pointer" title="close side menu" id="myOverlay"></div>
-
 <!-- !PAGE CONTENT! -->
-<div class="w3-main" style="margin-left:340px;margin-right:40px">
+<div class="w3-main" style="margin-right:clamp(16px,3vw,40px)">
 
   <!-- Header / Hero -->
-  <div class="w3-container hero" style="margin-top:80px" id="showcase">
+  <div class="w3-container hero" style="margin-top:26px" id="showcase">
     <h1 class="w3-jumbo" style="line-height:1.1;"><b>Cleaning you can<br><span class="honey">verify.</span></b></h1>
     <hr class="honey w3-round">
-    <p style="max-width:640px;margin-top:16px;">Book a cleaner, build your own task checklist, and review <b>before &amp; after photos</b> when the work is done. Cash is confirmed after you review the job; GCash and Maya are paid through PayMongo before work starts.</p>
+    <p style="max-width:640px;margin-top:16px;">A cleaner home starts with a plan that fits your life. Choose the tasks that matter, book a local cleaner, and review the results when the work is done.</p>
     <p style="margin-top:24px;">
       <?php if ($u): ?>
         <a class="w3-button btn-honey w3-padding-large" href="<?= $base ?>/<?= e($u['role']) ?>/dashboard.php">Go to my dashboard →</a>
       <?php else: ?>
-        <a class="w3-button btn-honey w3-padding-large" href="<?= $base ?>/register.php">Get started — it's free</a>
-        <a class="w3-button btn-dark w3-padding-large" href="<?= $base ?>/login.php">I already have an account</a>
+        <a class="w3-button btn-honey w3-padding-large" href="<?= $base ?>/register.php">Get started</a>
+        <a class="w3-button btn-dark w3-padding-large" style="margin-left:12px;" href="<?= $base ?>/login.php">Log in</a>
       <?php endif; ?>
     </p>
   </div>
 
   <!-- Photo gallery (modal) -->
   <div class="photo-grid">
-    <figure class="shot" style="height:265px;margin:0;" onclick="onClick(this, 'Disinfection &amp; sanitization &#8212; high-touch surfaces are wiped down with hospital-grade disinfectant before the job is marked done.')">
+    <figure class="shot" tabindex="0" role="button" aria-label="View Disinfection and Sanitization showcase photo" data-title="Disinfection &amp; Sanitization" data-desc="High-touch surfaces wiped with hospital-grade disinfectant." onclick="openShowcase(this)">
       <img src="<?= $base ?>/assets/img/sanitize.jpg" alt="Cleaning professional in protective gear disinfecting a table" loading="lazy">
       <figcaption><b>Disinfection &amp; Sanitization</b><span>High-touch surfaces wiped with hospital-grade disinfectant.</span></figcaption>
     </figure>
-    <figure class="shot" style="height:190px;margin:0;" onclick="onClick(this, 'Glass &amp; window care &#8212; sills, panes and frames are cleaned to a streak-free finish.')">
+    <figure class="shot" tabindex="0" role="button" aria-label="View Glass and Window Care showcase photo" data-title="Glass &amp; Window Care" data-desc="Sills, panes and frames finished streak-free." onclick="openShowcase(this)">
       <img src="<?= $base ?>/assets/img/glass.jpg" alt="Window being soaped and cleaned with a squeegee" loading="lazy">
       <figcaption><b>Glass &amp; Window Care</b><span>Sills, panes and frames finished streak-free.</span></figcaption>
     </figure>
-    <figure class="shot" style="height:230px;margin:0;" onclick="onClick(this, 'Kitchen deep clean &#8212; counters, sinks and grease-prone areas get the extra attention.')">
+    <figure class="shot" tabindex="0" role="button" aria-label="View Kitchen Deep Clean showcase photo" data-title="Kitchen Deep Clean" data-desc="Counters, sinks and grease-prone areas handled." onclick="openShowcase(this)">
       <img src="<?= $base ?>/assets/img/kitchen.jpg" alt="Clean kitchen sink and countertop" loading="lazy">
       <figcaption><b>Kitchen Deep Clean</b><span>Counters, sinks and grease-prone areas handled.</span></figcaption>
     </figure>
-    <figure class="shot" style="height:180px;margin:0;" onclick="onClick(this, 'Surface scrubbing &#8212; detail wiping across every finished room in your checklist.')">
+    <figure class="shot" tabindex="0" role="button" aria-label="View Surface Scrubbing showcase photo" data-title="Surface Scrubbing" data-desc="Detail wiping across every room on your checklist." onclick="openShowcase(this)">
       <img src="<?= $base ?>/assets/img/surface.jpg" alt="Hands scrubbing a surface with a sponge" loading="lazy">
       <figcaption><b>Surface Scrubbing</b><span>Detail wiping across every room on your checklist.</span></figcaption>
     </figure>
-    <figure class="shot" style="height:250px;margin:0;" onclick="onClick(this, 'Floor &amp; tile care &#8212; floors are mopped, scrubbed and left to dry cleanly.')">
+    <figure class="shot" tabindex="0" role="button" aria-label="View Floor and Tile Care showcase photo" data-title="Floor &amp; Tile Care" data-desc="Mopped, scrubbed and left to dry cleanly." onclick="openShowcase(this)">
       <img src="<?= $base ?>/assets/img/floor.jpg" alt="Mopping a tiled floor" loading="lazy">
       <figcaption><b>Floor &amp; Tile Care</b><span>Mopped, scrubbed and left to dry cleanly.</span></figcaption>
     </figure>
-    <figure class="shot" style="height:205px;margin:0;" onclick="onClick(this, 'Tools &amp; supplies &#8212; equipment is sanitised and brought fresh to every booking.')">
+    <figure class="shot" tabindex="0" role="button" aria-label="View Tools and Supplies showcase photo" data-title="Tools &amp; Supplies" data-desc="Sanitised equipment brought fresh to every job." onclick="openShowcase(this)">
       <img src="<?= $base ?>/assets/img/supplies.jpg" alt="Cleaning supplies and equipment" loading="lazy">
       <figcaption><b>Tools &amp; Supplies</b><span>Sanitised equipment brought fresh to every job.</span></figcaption>
     </figure>
   </div>
 
   <!-- Image Dialog -->
-  <dialog id="modal01" class="bg-dark w3-animate-zoom">
-    <button class="w3-button bg-dark w3-xxlarge w3-display-topright" commandfor="modal01" command="close" title="Close image">&times;</button>
-    <div class="w3-center w3-transparent w3-padding-64">
-      <img id="img01" alt="ChoreHive cleaning service" style="display:block;max-width:100%;max-height:68vh;margin:0 auto;border-radius:10px;">
-      <p id="caption" class="w3-large" style="color:#fff;"></p>
-    </div>
+  <dialog id="modal01" aria-labelledby="caption">
+    <figure class="showcase-dialog-content">
+      <button class="showcase-dialog-close" type="button" aria-label="Close image">&times;</button>
+      <img id="img01" alt="ChoreHive cleaning service">
+      <figcaption id="caption">
+        <b id="captionTitle"></b>
+        <span id="captionDesc"></span>
+      </figcaption>
+    </figure>
   </dialog>
 
   <!-- Services -->
@@ -216,7 +268,7 @@ $base = ch_base();
         <div style="text-align:right;">
           <h2 class="honey" style="margin:0;">₱<?= number_format($s['base_price'], 2) ?></h2>
           <?php if ($u && $u['role'] === 'client'): ?>
-            <a class="w3-button btn-honey" style="margin-top:6px;" href="<?= $base ?>/client/book.php">Book now</a>
+            <a class="w3-button btn-honey" style="margin-top:6px;" href="<?= $base ?>/client/workers.php">Choose a cleaner</a>
           <?php elseif (!$u): ?>
             <a class="w3-button btn-dark" style="margin-top:6px;" href="<?= $base ?>/register.php">Sign up to book</a>
           <?php endif; ?>
@@ -335,27 +387,60 @@ $base = ch_base();
 </div>
 
 <script>
-const sidebar = document.getElementById("mySidebar");
-const overlay = document.getElementById("myOverlay");
 const imageDialog = document.getElementById("modal01");
 const dialogTile = document.getElementById("img01");
-const caption = document.getElementById("caption");
+const captionTitle = document.getElementById("captionTitle");
+const captionDesc = document.getElementById("captionDesc");
+const dialogCloseBtn = imageDialog.querySelector(".showcase-dialog-close");
 
-function w3_open() {
-  sidebar.style.display = "block";
-  overlay.style.display = "block";
-}
-function w3_close() {
-  sidebar.style.display = "none";
-  overlay.style.display = "none";
-}
-function onClick(el, text) {
+/* Mobile navigation (burger -> dropdown panel) */
+(function () {
+  const burger = document.getElementById("siteBurger");
+  const nav = document.getElementById("siteNav");
+  if (!burger || !nav) return;
+  const setOpen = (open) => {
+    nav.classList.toggle("open", open);
+    burger.setAttribute("aria-expanded", open ? "true" : "false");
+  };
+  burger.addEventListener("click", () => setOpen(!nav.classList.contains("open")));
+  nav.addEventListener("click", (ev) => { if (ev.target.closest("a")) setOpen(false); });
+  document.addEventListener("keydown", (ev) => { if (ev.key === "Escape") setOpen(false); });
+  window.addEventListener("resize", () => { if (window.innerWidth > 900) setOpen(false); });
+})();
+function openShowcase(el) {
   var img = el.querySelector("img");
   dialogTile.src = img ? img.getAttribute("src") : "";
   dialogTile.alt = img ? img.alt : "";
-  caption.textContent = text;
+  captionTitle.textContent = el.dataset.title || "";
+  captionDesc.textContent = el.dataset.desc || "";
   imageDialog.showModal();
+  document.body.classList.add("showcase-open");
+  requestAnimationFrame(function () {
+    requestAnimationFrame(function () { imageDialog.classList.add("is-open"); });
+  });
+  dialogCloseBtn.focus();
 }
+function closeShowcase() {
+  imageDialog.classList.remove("is-open");
+  document.body.classList.remove("showcase-open");
+  window.setTimeout(function () { imageDialog.close(); }, 260);
+}
+document.querySelectorAll(".photo-grid .shot").forEach(function (tile) {
+  tile.addEventListener("keydown", function (event) {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      tile.click();
+    }
+  });
+});
+dialogCloseBtn.addEventListener("click", closeShowcase);
+imageDialog.addEventListener("cancel", function (event) {
+  event.preventDefault();
+  closeShowcase();
+});
+imageDialog.addEventListener("click", function (event) {
+  if (event.target === imageDialog) closeShowcase();
+});
 </script>
 
 </body>

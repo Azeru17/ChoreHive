@@ -2,3 +2,6 @@ config.local.php
 email_outbox.log
 uploads/*
 !uploads/.htaccess
+.freebuff/
+.vercel/
+node_modules/

@@ -58,16 +58,16 @@ $myjobs = $conn->query("SELECT b.*, s.name service, c.name client FROM bookings 
           <?php if (in_array($j['payment_method'], ['gcash','maya'], true) && !in_array($j['payment_status'], ['paid','demo_paid'], true)): ?>
             <span class="payment-waiting-pill" title="Waiting for customer prepayment">Waiting for payment</span>
           <?php else: ?>
-            <form method="post" action="jobs.php" style="display:inline"><?= csrf_field() ?><input type="hidden" name="return_to" value="dashboard"><button class="btn btn-sm" name="start" value="<?= (int)$j['id'] ?>">Confirm Job</button></form>
+            <form method="post" action="jobs.php" style="display:inline" data-confirm="Start booking #<?= (int)$j['id'] ?> now? This changes the booking to In progress and notifies the customer. It does not mark the job complete." data-confirm-title="Start job"><?= csrf_field() ?><input type="hidden" name="return_to" value="dashboard"><button class="btn btn-sm" name="start" value="<?= (int)$j['id'] ?>">Confirm Job</button></form>
           <?php endif; ?>
           <?php if ($j['payment_method'] === 'cash' && $j['payment_status'] === 'unpaid'): ?>
-            <form method="post" action="jobs.php" style="display:inline" onsubmit="return confirm('Reject this job? It will be unassigned and the client will be notified.');"><?= csrf_field() ?><input type="hidden" name="return_to" value="dashboard"><input type="hidden" name="decline" value="<?= (int)$j['id'] ?>"><button class="btn btn-sm btn-outline">Reject</button></form>
+            <form method="post" action="jobs.php" style="display:inline" data-confirm="Reject this job? It will be unassigned and the client will be notified." data-confirm-title="Reject job" data-confirm-yes="Yes, reject"><?= csrf_field() ?><input type="hidden" name="return_to" value="dashboard"><input type="hidden" name="decline" value="<?= (int)$j['id'] ?>"><button class="btn btn-sm btn-outline">Reject</button></form>
           <?php else: ?>
-            <span class="payment-waiting-pill" title="Online-payment bookings need administrator handling">Contact admin to reassign</span>
+            <span class="payment-waiting-pill" title="Online payments cannot currently be declined or refunded automatically. Contact an administrator for reassignment and refund assistance.">Contact admin: reassignment / refund</span>
           <?php endif; ?>
         <?php elseif ($j['status'] === 'in_progress'): ?>
           <?php if ((int)$j['client_started_ack'] === 1): ?>
-            <form method="post" action="jobs.php" style="display:inline" onsubmit="return confirm('Mark this job as done? The client will be notified to review it.')"><?= csrf_field() ?><input type="hidden" name="return_to" value="dashboard"><button class="btn btn-sm" name="finish" value="<?= (int)$j['id'] ?>">Job Done</button></form>
+            <form method="post" action="jobs.php" style="display:inline" data-confirm="Mark booking #<?= (int)$j['id'] ?> as done? The customer will be asked to review the photos and confirm completion. For cash bookings, this does not record payment; the customer confirms cash separately." data-confirm-title="Mark job done"><?= csrf_field() ?><input type="hidden" name="return_to" value="dashboard"><button class="btn btn-sm" name="finish" value="<?= (int)$j['id'] ?>">Job Done</button></form>
           <?php else: ?>
             <span class="payment-waiting-pill" title="Waiting for the client to confirm the job started">Waiting for client</span>
           <?php endif; ?>

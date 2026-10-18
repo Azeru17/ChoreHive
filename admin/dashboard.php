@@ -47,6 +47,7 @@ $finishedTotal = (int)$conn->query("SELECT COUNT(*) c FROM bookings WHERE status
 $unassigned = (int)$conn->query("SELECT COUNT(*) c FROM bookings WHERE worker_id IS NULL AND status='pending'")->fetch_assoc()['c'];
 $conversationCount = (int)$conn->query('SELECT COUNT(*) c FROM chat_threads')->fetch_assoc()['c'];
 $messageCount = (int)$conn->query('SELECT COUNT(*) c FROM chat_messages')->fetch_assoc()['c'];
+$contactUnread = (int)$conn->query('SELECT COUNT(*) c FROM contact_messages WHERE is_read=0')->fetch_assoc()['c'];
 $onlineWorkers = (int)$conn->query("SELECT COUNT(*) c FROM worker_presence p JOIN users w ON w.id=p.worker_id WHERE w.role='worker' AND p.last_seen >= NOW() - INTERVAL 5 MINUTE")->fetch_assoc()['c'];
 $workersWithActiveJobs = (int)$conn->query("SELECT COUNT(DISTINCT worker_id) c FROM bookings WHERE worker_id IS NOT NULL AND status IN ('assigned','in_progress','awaiting_verification')")->fetch_assoc()['c'];
 
@@ -86,7 +87,8 @@ $feedIcons = [
 $title = 'Admin Dashboard';
 require '../layout.php';
 ?>
-<h1><i class="bi bi-speedometer2"></i>&nbsp; Admin Dashboard</h1>
+<div class="admin-dashboard">
+<h1 class="dash-title"><i class="bi bi-speedometer2"></i> Admin Dashboard</h1>
 
 <!-- Stat cards -->
 <div class="dash-stats">
@@ -119,15 +121,31 @@ require '../layout.php';
     <a class="btn btn-sec" href="chats.php">Open conversations →</a>
   </div>
   <div class="market-admin-overview-grid">
-    <a href="users.php" class="market-admin-overview-card"><span class="market-admin-overview-icon">♙</span><span class="market-admin-overview-value"><?= (int)$counts['worker'] ?></span><b>Cleaner profiles</b><small>Manage worker accounts and badges</small></a>
-    <a href="chats.php" class="market-admin-overview-card"><span class="market-admin-overview-icon">☏</span><span class="market-admin-overview-value"><?= $conversationCount ?></span><b>Conversations</b><small><?= $messageCount ?> messages recorded</small></a>
-    <a href="users.php" class="market-admin-overview-card"><span class="market-admin-overview-icon">●</span><span class="market-admin-overview-value"><?= $onlineWorkers ?></span><b>Recently active workers</b><small>Active in the last five minutes</small></a>
-    <a href="bookings.php" class="market-admin-overview-card"><span class="market-admin-overview-icon">✓</span><span class="market-admin-overview-value"><?= $workersWithActiveJobs ?></span><b>Workers on active jobs</b><small>Assigned, in progress or awaiting verification</small></a>
+    <a href="users.php" class="market-admin-overview-card">
+      <span class="market-admin-overview-top"><span class="market-admin-overview-icon"><i class="bi bi-people"></i></span><span class="market-admin-overview-value"><?= (int)$counts['worker'] ?></span></span>
+      <b>Cleaner profiles</b><small>Manage worker accounts and badges</small>
+    </a>
+    <a href="chats.php" class="market-admin-overview-card">
+      <span class="market-admin-overview-top"><span class="market-admin-overview-icon"><i class="bi bi-chat-dots"></i></span><span class="market-admin-overview-value"><?= $conversationCount ?></span></span>
+      <b>Conversations</b><small><?= $messageCount ?> messages recorded</small>
+    </a>
+    <a href="users.php" class="market-admin-overview-card">
+      <span class="market-admin-overview-top"><span class="market-admin-overview-icon"><i class="bi bi-broadcast"></i></span><span class="market-admin-overview-value"><?= $onlineWorkers ?></span></span>
+      <b>Recently active workers</b><small>Active in the last five minutes</small>
+    </a>
+    <a href="bookings.php" class="market-admin-overview-card">
+      <span class="market-admin-overview-top"><span class="market-admin-overview-icon"><i class="bi bi-briefcase"></i></span><span class="market-admin-overview-value"><?= $workersWithActiveJobs ?></span></span>
+      <b>Workers on active jobs</b><small>Assigned, in progress or awaiting verification</small>
+    </a>
+    <a href="contact.php" class="market-admin-overview-card">
+      <span class="market-admin-overview-top"><span class="market-admin-overview-icon"><i class="bi bi-envelope"></i></span><span class="market-admin-overview-value"><?= $contactUnread ?></span></span>
+      <b>Unread contact messages</b><small>Open the support inbox</small>
+    </a>
   </div>
 </section>
 
 <!-- Charts & feed -->
-<div class="card" style="margin-top:16px;">
+<div class="card dash-panels">
   <div class="dash-cols">
     <div>
       <h2 class="card-title"><i class="bi bi-graph-up"></i> Bookings per service</h2>
@@ -152,8 +170,8 @@ require '../layout.php';
             if (mb_strpos($details, $actor . ' ') === 0) $details = trim(mb_substr($details, mb_strlen($actor) + 1));
           ?>
             <div class="feed-row" style="animation-delay:<?= $i * 55 ?>ms">
-              <span class="feed-ico <?= $tone ?>"><i class="fa <?= $icon ?>"></i></span>
-              <div>
+              <span class="feed-ico <?= $tone ?>"><i class="bi <?= $icon ?>"></i></span>
+              <div class="feed-body">
                 <div class="feed-text"><b><?= e($actor) ?></b> <?= e($details) ?></div>
                 <div class="feed-when"><?= date('M j, g:i A', strtotime($f['created_at'])) ?></div>
               </div>
@@ -166,9 +184,9 @@ require '../layout.php';
 </div>
 
 <?php if ($unassigned || $unreadNotifs || $finishedTotal): ?>
-<div class="card" style="border-color:#f0dcae;background:#fffdf8;">
+<div class="card needs-attention-card">
   <h2 class="card-title"><i class="bi bi-bell" style="color:var(--warn)"></i> Needs attention</h2>
-  <ul style="margin-left:18px;">
+  <ul class="dash-attention">
     <?php if ($unassigned): ?><li><b><?= $unassigned ?></b> booking(s) still waiting for a worker — <a href="bookings.php">assign a worker</a></li><?php endif; ?>
     <?php if ($unreadNotifs): ?><li><b><?= $unreadNotifs ?></b> unread notification(s) across all accounts</li><?php endif; ?>
     <?php if ($finishedTotal): ?><li><b><?= $finishedTotal ?></b> finished booking(s) can be purged — <a href="bookings.php">clean up</a></li><?php endif; ?>
@@ -178,29 +196,30 @@ require '../layout.php';
 
 <div class="card">
   <h2 class="card-title"><i class="bi bi-lightning-charge"></i> Quick actions</h2>
-  <div class="actions">
-    <a class="btn" href="bookings.php"><i class="bi bi-calendar3"></i>&nbsp; Manage bookings</a>
-    <a class="btn btn-sec" href="users.php"><i class="bi bi-people"></i>&nbsp; Users &amp; badges</a>
-    <a class="btn btn-sec" href="services.php"><i class="bi bi-tags"></i>&nbsp; Services</a>
-    <a class="btn btn-sec" href="reports.php"><i class="bi bi-bar-chart"></i>&nbsp; Reports</a>
-    <a class="btn btn-sec" href="audit.php"><i class="bi bi-clock-history"></i>&nbsp; Audit log</a>
+  <div class="actions dash-actions">
+    <a class="btn" href="bookings.php"><i class="bi bi-calendar3"></i> Manage bookings</a>
+    <a class="btn btn-sec" href="users.php"><i class="bi bi-people"></i> Users &amp; badges</a>
+    <a class="btn btn-sec" href="services.php"><i class="bi bi-tags"></i> Services</a>
+    <a class="btn btn-sec" href="reports.php"><i class="bi bi-bar-chart"></i> Reports</a>
+    <a class="btn btn-sec" href="audit.php"><i class="bi bi-clock-history"></i> Audit log</a>
   </div>
 </div>
 
-<div class="card" style="margin-top:16px;">
+<div class="card">
   <h2 class="card-title"><i class="bi bi-megaphone" style="color:var(--honey)"></i> Broadcast announcement</h2>
-  <p class="muted" style="margin-bottom:12px;">Send an in-app notification to all users, or just clients or workers.</p>
-  <form method="post">
+  <p class="muted broadcast-intro">Send an in-app notification to all users, or just clients or workers.</p>
+  <form method="post" class="broadcast-form">
     <?= csrf_field() ?>
-    <label>Audience</label>
-    <select name="audience" style="max-width:260px;">
+    <label for="broadcastAudience">Audience</label>
+    <select name="audience" id="broadcastAudience">
       <option value="all">All users (clients + workers)</option>
       <option value="client">Clients only</option>
       <option value="worker">Workers only</option>
     </select>
-    <label style="margin-top:10px;">Message</label>
-    <textarea name="broadcast_message" rows="3" maxlength="500" required placeholder="e.g. We've added new cleaning services — book now and get 10% off this week!"></textarea>
-    <button name="broadcast" value="1" class="btn" style="margin-top:10px;">📣 Send announcement</button>
+    <label for="broadcastMessage">Message</label>
+    <textarea name="broadcast_message" id="broadcastMessage" rows="3" maxlength="500" required placeholder="e.g. We've added new cleaning services — book now and get 10% off this week!"></textarea>
+    <button name="broadcast" value="1" class="btn"><i class="bi bi-megaphone"></i> Send announcement</button>
   </form>
+</div>
 </div>
 <?php require '../footer.php'; ?>

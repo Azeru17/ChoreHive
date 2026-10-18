@@ -92,12 +92,15 @@ $pinnedBookings = (int)$conn->query("SELECT COUNT(*) c FROM bookings WHERE addre
   <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px;">
     <h2 style="margin-bottom:0;">All bookings <span class="muted" style="font-weight:400;">(<?= (int)$res->num_rows ?>)</span></h2>
     <?php if ((int)$finished > 0): ?>
-      <form method="post" onsubmit="return confirm('Purge all $finished finished booking(s) site-wide?\n\nThis permanently deletes their checklists, photos, feedback and uploaded files.');">
+      <form method="post" data-confirm="Purge all $finished finished booking(s) site-wide?\n\nThis permanently deletes their checklists, photos, feedback and uploaded files." data-confirm-title="Purge bookings" data-confirm-yes="Yes, purge">
         <?= csrf_field() ?>
         <button class="btn btn-sm btn-outline" name="purge_finished" value="1">🧹 Purge finished (<?= (int)$finished ?>)</button>
       </form>
     <?php endif; ?>
   </div>
+  <?php if ($res->num_rows === 0): ?>
+    <div class="empty-state"><span class="big">📋</span>No bookings yet. New bookings will appear here as clients hire cleaners.</div>
+  <?php endif; ?>
   <div class="table-wrap">
   <table class="fixed-cols">
     <colgroup><col style="width:4%"><col style="width:10%"><col style="width:13%"><col style="width:11%"><col style="width:15%"><col style="width:9%"><col style="width:11%"><col style="width:20%"><col style="width:7%"></colgroup>
@@ -126,7 +129,7 @@ $pinnedBookings = (int)$conn->query("SELECT COUNT(*) c FROM bookings WHERE addre
         </form><?php endif; ?>
       </td>
       <td>
-        <form method="post" onsubmit="return confirm('Delete booking #<?= $b['id'] ?>\n<?= e($b['client']) ?> · <?= e($b['service']) ?>\n\nThis permanently removes the checklist, photos, feedback and uploaded files.');">
+        <form method="post" data-confirm="Delete booking #<?= $b['id'] ?>\n<?= e($b['client']) ?> · <?= e($b['service']) ?>\n\nThis permanently removes the checklist, photos, feedback and uploaded files." data-confirm-title="Delete booking" data-confirm-yes="Yes, delete">
           <?= csrf_field() ?>
           <button class="icon-btn danger" name="delete" value="<?= $b['id'] ?>" title="Delete booking" aria-label="Delete booking">🗑</button>
         </form>

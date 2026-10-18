@@ -2,6 +2,7 @@ config.local.php
 email_outbox.log
 uploads/*
 !uploads/.htaccess
+tools/
 db.sql
 db.production.sql
 migration_*.sql

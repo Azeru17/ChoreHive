@@ -3,7 +3,7 @@ require '../config.php';
 require_once '../paymongo.php';
 $u = require_role('client');
 $id = (int)($_GET['id'] ?? 0);
-$b = $conn->query("SELECT b.*, s.name service, s.description sdesc, u.name worker FROM bookings b
+$b = $conn->query("SELECT b.*, s.name service, s.description sdesc, u.id worker_user_id, u.name worker, u.phone worker_phone, u.email worker_email FROM bookings b
   JOIN services s ON s.id=b.service_id LEFT JOIN users u ON u.id=b.worker_id
   WHERE b.id=$id AND b.client_id={$u['id']}")->fetch_assoc();
 if (!$b) {
@@ -164,7 +164,7 @@ if ($b['status'] !== 'completed'
     && $b['payment_status'] === 'unpaid'
     && !empty($b['paymongo_checkout_id'])
     && paymongo_sync_booking($b)) {
-    $b = $conn->query("SELECT b.*, s.name service, s.description sdesc, u.name worker FROM bookings b
+    $b = $conn->query("SELECT b.*, s.name service, s.description sdesc, u.id worker_user_id, u.name worker, u.phone worker_phone, u.email worker_email FROM bookings b
       JOIN services s ON s.id=b.service_id LEFT JOIN users u ON u.id=b.worker_id
       WHERE b.id=$id AND b.client_id={$u['id']}")->fetch_assoc();
     $wasCancelled = $b['status'] === 'cancelled';
@@ -186,6 +186,13 @@ $fb = $conn->query("SELECT * FROM feedback WHERE booking_id=$id")->fetch_assoc()
 <h1>Booking #<?= $id ?> — <?= e($b['service']) ?></h1>
 <div class="card">
   <p><b>Worker:</b> <?= e($b['worker'] ?? 'Unassigned') ?> &nbsp; <b>Schedule:</b> <?= date('M j, Y g:i A', strtotime($b['schedule'])) ?></p>
+  <?php if (!empty($b['worker_user_id'])): ?>
+    <p><b>Worker contact:</b>
+      <?php if (!empty($b['worker_phone'])): ?><a href="tel:<?= e(preg_replace('/[^0-9+]/', '', $b['worker_phone'])) ?>"><?= e($b['worker_phone']) ?></a><?php else: ?><span class="muted">Phone not provided</span><?php endif; ?>
+      <?php if (!empty($b['worker_email'])): ?> · <a href="mailto:<?= e($b['worker_email']) ?>"><?= e($b['worker_email']) ?></a><?php endif; ?>
+      · <a href="../chat.php?user_id=<?= (int)$b['worker_user_id'] ?>">Chat with worker</a>
+    </p>
+  <?php endif; ?>
   <p><b>Address:</b> <?= e($b['address']) ?> &nbsp; <b>Total:</b> ₱<?= number_format($b['total_price'], 2) ?></p>
   <?php if ($b['address_lat'] !== null && $b['address_lng'] !== null): ?><p><b>Map pin:</b> <a target="_blank" rel="noopener" href="https://www.openstreetmap.org/?mlat=<?= e((string)$b['address_lat']) ?>&amp;mlon=<?= e((string)$b['address_lng']) ?>#map=17/<?= e((string)$b['address_lat']) ?>/<?= e((string)$b['address_lng']) ?>">Open pinned location ↗</a></p><?php endif; ?>
   <p><b>Status:</b> <span class="badge <?= status_class($b['status']) ?>"><?= str_replace('_',' ',$b['status']) ?></span>
@@ -218,29 +225,43 @@ $fb = $conn->query("SELECT * FROM feedback WHERE booking_id=$id")->fetch_assoc()
         </select>
         <input name="cancel_reason_other" id="cancelReasonOther" maxlength="200" placeholder="Please tell us why" style="display:none;margin-top:8px;width:100%;padding:9px 12px;border:1px solid var(--line);border-radius:8px;font-family:inherit;">
       </div>
-      <button type="button" id="cancelStartBtn" class="btn-sec">Cancel booking</button>
-      <button type="submit" name="cancel" value="1" id="cancelConfirmBtn" class="btn" style="display:none;background:#c0392b;border-color:#c0392b;" onclick="return confirm('Cancel this booking? This cannot be undone. Any online payment will not be refunded automatically.')">Yes, cancel booking</button>
+      <div class="booking-cancel-actions">
+        <button type="button" id="cancelStartBtn" class="btn-sec">Cancel booking</button>
+        <button type="button" id="cancelBackBtn" class="btn-sec" style="display:none;">← Back</button>
+        <button type="submit" name="cancel" value="1" id="cancelConfirmBtn" class="btn" style="display:none;background:#c0392b;border-color:#c0392b;" data-confirm="Cancel booking #<?= (int)$id ?>? This will stop the booking and notify the worker. This action cannot be undone.<?= $b['payment_method'] !== 'cash' ? ' Online payments are not refunded automatically.' : '' ?>" data-confirm-title="Cancel booking" data-confirm-yes="Yes, cancel booking">Yes, cancel booking</button>
+      </div>
     </form>
     <script>
     (()=>{
       const start=document.getElementById('cancelStartBtn');
+      const back=document.getElementById('cancelBackBtn');
       const wrap=document.getElementById('cancelReasonWrap');
       const confirmBtn=document.getElementById('cancelConfirmBtn');
       const sel=document.getElementById('cancelReason');
       const other=document.getElementById('cancelReasonOther');
-      if(start&&wrap&&confirmBtn) start.addEventListener('click',()=>{
-        wrap.style.display='block';
-        start.style.display='none';
-        confirmBtn.style.display='';
-        sel.focus();
-      });
+      if(start&&back&&wrap&&confirmBtn) {
+        start.addEventListener('click',()=>{
+          wrap.style.display='block';
+          start.style.display='none';
+          back.style.display='';
+          confirmBtn.style.display='';
+          sel.focus();
+        });
+        back.addEventListener('click',()=>{
+          wrap.style.display='none';
+          start.style.display='';
+          back.style.display='none';
+          confirmBtn.style.display='none';
+          start.focus();
+        });
+      }
       if(sel&&other) sel.addEventListener('change',()=>{other.style.display=sel.value==='other'?'':'none';});
     })();
     </script>
   <?php endif; ?>
   <?php if (booking_is_finished($b['status'])): ?>
     <div class="danger-zone" style="margin-top:14px;padding:14px 16px;border-radius:12px;">
-      <form method="post" onsubmit="return confirm('Delete this booking permanently?\n\nThis also removes its checklist, photos and feedback. This cannot be undone.');">
+      <form method="post" data-confirm="Permanently delete booking #<?= (int)$id ?>? Its checklist, photos and feedback will also be deleted. This cannot be undone.<?= in_array($b['payment_status'], ['paid','demo_paid'], true) ? ' Deleting the booking does not refund its payment.' : '' ?>" data-confirm-title="Delete booking" data-confirm-yes="Yes, delete">
         <?= csrf_field() ?>
         <b style="color:var(--err)">Clean up</b>
         <p class="muted" style="margin:4px 0 10px;">This booking is finished. Delete it to clear it from your history.</p>
@@ -261,7 +282,7 @@ $fb = $conn->query("SELECT * FROM feedback WHERE booking_id=$id")->fetch_assoc()
           <span><?= $it['done'] ? '✅' : '⬜' ?></span>
           <span class="txt"><?= e($it['task']) ?></span>
           <?php if ($editable): ?>
-            <form method="post" onsubmit="return confirm('Remove this task?')">
+            <form method="post" data-confirm="Remove this task?" data-confirm-title="Remove task" data-confirm-yes="Yes, remove">
               <?= csrf_field() ?>
               <button class="icon-btn" name="delete_task" value="<?= $it['id'] ?>" title="Remove task" aria-label="Remove task">&times;</button>
             </form>
@@ -279,10 +300,10 @@ $fb = $conn->query("SELECT * FROM feedback WHERE booking_id=$id")->fetch_assoc()
   <h2>Before &amp; After Photos <span class="muted" style="font-weight:400">(click a photo to enlarge)</span></h2>
   <div class="photo-grid">
     <?php foreach ($before as $f): ?>
-      <figure><img class="lightbox-img" src="../photo.php?id=<?= (int)$f['id'] ?>" alt="Before photo" loading="lazy"><figcaption>before</figcaption></figure>
+      <figure><img class="lightbox-img" src="../photo.php?id=<?= (int)$f['id'] ?>" alt="Before photo" loading="lazy" tabindex="0" role="button" aria-label="Enlarge before photo"><figcaption>before</figcaption></figure>
     <?php endforeach; ?>
     <?php foreach ($after as $f): ?>
-      <figure><img class="lightbox-img" src="../photo.php?id=<?= (int)$f['id'] ?>" alt="After photo" loading="lazy"><figcaption>after</figcaption></figure>
+      <figure><img class="lightbox-img" src="../photo.php?id=<?= (int)$f['id'] ?>" alt="After photo" loading="lazy" tabindex="0" role="button" aria-label="Enlarge after photo"><figcaption>after</figcaption></figure>
     <?php endforeach; ?>
   </div>
   <?php if (!$before && !$after) echo "<p class='muted'>No photos yet.</p>"; ?>
@@ -291,12 +312,12 @@ $fb = $conn->query("SELECT * FROM feedback WHERE booking_id=$id")->fetch_assoc()
 <div class="card">
   <?php if ($b['status'] === 'awaiting_verification'): ?>
     <h2>Review the completed work</h2>
-    <p>Check the after photos and checklist before confirming. Your payment timing depends on the method selected at booking.</p>
+    <p>Check the after photos and checklist before confirming.</p>
     <?php if ($b['payment_method'] === 'cash'): ?>
       <p class="payment-demo-note">Cash is due after the job. Only confirm once you have actually handed the cash to the worker.</p>
-      <form method="post" onsubmit="return confirm('Confirm that the cleaning is complete and you have handed ₱<?= number_format((float)$b['total_price'],2) ?> in cash to the worker?');" class="cash-confirm-form">
+      <form method="post" data-confirm="Confirm that the cleaning is complete and you have handed ₱<?= number_format((float)$b['total_price'],2) ?> in cash to the worker?" data-confirm-title="Confirm cash payment" class="cash-confirm-form">
         <?= csrf_field() ?><input type="hidden" name="cash_confirmation" value="yes">
-        <button name="confirm_cash_payment" value="1">✔ Confirm Job Finish &amp; complete (cash paid)</button>
+        <button name="confirm_cash_payment" value="1">✔ Confirm Job Finish &amp; complete</button>
       </form>
     <?php elseif (in_array($b['payment_status'], ['paid','demo_paid'], true)): ?>
       <p class="payment-demo-note"><?= $b['payment_status'] === 'demo_paid' ? 'This is a payment simulation only; no money was transferred. Verifying the work will complete the booking.' : 'Your online payment is already recorded. Verifying the work will complete the booking.' ?></p>
@@ -311,7 +332,7 @@ $fb = $conn->query("SELECT * FROM feedback WHERE booking_id=$id")->fetch_assoc()
       <p class="payment-demo-note">✓ You confirmed the worker started. They'll press <b>Job Done</b> when finished — you'll then confirm the finished job.</p>
     <?php else: ?>
       <p class="payment-demo-note">The worker has started your job. Confirm to acknowledge so they can mark it done once finished.</p>
-      <form method="post" onsubmit="return confirm('Confirm the worker has started this job?');"><?= csrf_field() ?><button name="confirm_job_start" value="1">Confirm Job</button></form>
+      <form method="post" data-confirm="Confirm that the worker has arrived and started booking #<?= (int)$id ?>? This only acknowledges the start; it does not confirm that the cleaning is finished or that payment was made." data-confirm-title="Confirm job start"><?= csrf_field() ?><button name="confirm_job_start" value="1">Confirm Job</button></form>
     <?php endif; ?>
   <?php elseif ($b['status'] === 'completed'): ?>
     <h2>Feedback</h2>
@@ -329,6 +350,6 @@ $fb = $conn->query("SELECT * FROM feedback WHERE booking_id=$id")->fetch_assoc()
     <p style="margin-top:10px;"><a class="btn" href="bookings.php?rebook=<?= $id ?>">🔁 Book this again</a></p>
   <?php endif; ?>
 </div>
-<div id="lightbox"><img id="lightbox-img" src="" alt="Enlarged photo"></div>
+<div id="lightbox" role="dialog" aria-modal="true" aria-label="Enlarged booking photo" aria-hidden="true"><img id="lightbox-img" src="" alt="Enlarged photo" tabindex="-1"></div>
 <?php if (in_array($b['payment_status'], ['paid','demo_paid'], true)): ?><p class="receipt-cta"><a class="btn btn-sec" href="receipt.php?id=<?= (int)$id ?>"><?= $b['payment_status'] === 'demo_paid' ? 'View simulation record' : 'View / print / save receipt' ?></a></p><?php endif; ?>
 <?php require '../footer.php'; ?>

@@ -168,8 +168,13 @@ function require_marketplace_schema() {
     global $conn;
     static $ready = null;
     if ($ready === null) {
-        $check = $conn->query("SELECT COUNT(*) present FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='users' AND COLUMN_NAME='worker_approved'");
-        $ready = (int)$check->fetch_assoc()['present'] === 1;
+        $check = $conn->query("SELECT
+                SUM(COLUMN_NAME='worker_approved') AS worker_ok,
+                SUM(COLUMN_NAME='city') AS city_ok
+            FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='users'");
+        $cols = $check ? $check->fetch_assoc() : ['worker_ok' => 0, 'city_ok' => 0];
+        $ready = (int)$cols['worker_ok'] === 1 && (int)$cols['city_ok'] === 1;
     }
     if ($ready) return;
 
@@ -191,7 +196,7 @@ function require_marketplace_schema() {
     </style></head><body><main><h1>ChoreHive needs a database upgrade</h1>
       <p class="notice">The current database is missing the worker marketplace-approval schema, so ChoreHive cannot safely load worker listings or booking workflows. No database changes were made automatically.</p>
       <p>For an existing installation, back up the database, then check <code>README.md</code> and apply only the migrations your database has not already received, in the listed order:</p>
-      <ol><li><code>migration_marketplace_chat.sql</code></li><li><code>migration_payments_maps.sql</code></li><li><code>migration_paymongo.sql</code></li><li><code>migration_new_features.sql</code></li></ol>
+      <ol><li><code>migration_marketplace_chat.sql</code></li><li><code>migration_chat_message_delete.sql</code></li><li><code>migration_payments_maps.sql</code></li><li><code>migration_paymongo.sql</code></li><li><code>migration_new_features.sql</code></li><li><code>migration_user_city.sql</code></li></ol>
       <p>For a fresh installation, import the current <code>db.sql</code> instead. Do not import it over an existing database.</p>
       <p><small>After upgrading, an administrator must explicitly review and approve worker listings.</small></p>
       <p><a href="' . e($base) . '/">Return to ChoreHive</a></p></main></body></html>';
@@ -274,6 +279,85 @@ function purge_user_history($user_id, $column) {
 }
 
 /* ---------- Profile / account helpers ---------- */
+/**
+ * Get the next available users.id for a specific role (reusing freed IDs when
+ * one is available).
+ *
+ * IMPORTANT: users.id is ONE shared primary key covering every role, while
+ * role_id_counters is per role. Two roles can therefore point at the same
+ * "next" number, so each candidate is verified against the whole users table
+ * before being handed out. Without that check, registering a client can fail
+ * with "Duplicate entry" simply because a worker already owns that id.
+ */
+function get_next_role_id($conn, $role) {
+    global $conn;
+    if (!in_array($role, ['client', 'worker', 'admin'], true)) {
+        return null;
+    }
+
+    $isTaken = static function (int $id) use ($conn): bool {
+        $s = $conn->prepare('SELECT 1 FROM users WHERE id=? LIMIT 1');
+        $s->bind_param('i', $id);
+        $s->execute();
+        $taken = (bool)$s->get_result()->fetch_row();
+        $s->close();
+        return $taken;
+    };
+
+    $dropFreed = static function (string $role, int $id) use ($conn): void {
+        $d = $conn->prepare('DELETE FROM role_id_freed WHERE role=? AND freed_id=?');
+        $d->bind_param('si', $role, $id);
+        $d->execute();
+        $d->close();
+    };
+
+    // 1. Reuse an ID freed by deleting an account of this role.
+    $stmt = $conn->prepare("SELECT freed_id FROM role_id_freed WHERE role=? ORDER BY id ASC LIMIT 1");
+    $stmt->bind_param('s', $role);
+    $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    if ($row) {
+        $freed_id = (int)$row['freed_id'];
+        $dropFreed($role, $freed_id);
+        if (!$isTaken($freed_id)) {
+            return $freed_id;
+        }
+        // stale entry - already used by another role, fall through to the counter
+    }
+
+    // 2. Take the next counter value.
+    $stmt = $conn->prepare("SELECT next_id FROM role_id_counters WHERE role=?");
+    $stmt->bind_param('s', $role);
+    $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+
+    if ($row) {
+        $next_id = (int)$row['next_id'];
+    } else {
+        // First use of this role: start above the highest ID already used.
+        $safeRole = $conn->real_escape_string($role);
+        $maxRow = $conn->query("SELECT COALESCE(MAX(id), 0) + 1 AS next_id FROM users WHERE role = '$safeRole'")->fetch_assoc();
+        $next_id = (int)($maxRow['next_id'] ?? 1);
+    }
+
+    // 3. Skip any ID already used by ANY role.
+    $guard = 0;
+    while ($isTaken($next_id) && $guard++ < 100000) {
+        $next_id++;
+    }
+
+    // 4. Persist the following free number.
+    $next_free = $next_id + 1;
+    $stmt = $conn->prepare("INSERT INTO role_id_counters (role, next_id) VALUES (?, ?) ON DUPLICATE KEY UPDATE next_id = GREATEST(next_id, VALUES(next_id))");
+    $stmt->bind_param('si', $role, $next_free);
+    $stmt->execute();
+    $stmt->close();
+
+    return $next_id;
+}
+
 /** Re-read the signed-in user and refresh the session snapshot after an update. */
 function refresh_session_user($conn) {
     $id = (int)($_SESSION['user']['id'] ?? 0);
@@ -434,11 +518,35 @@ function delete_avatar($conn, $user_id) {
     $stmt->bind_param('i', $user_id);
     $stmt->execute();
 }
-function update_profile($user_id, $name, $phone, $address, $bio) {
+function update_profile($user_id, $name, $phone, $address, $city, $bio) {
     global $conn;
-    $stmt = $conn->prepare("UPDATE users SET name=?, phone=?, address=?, bio=? WHERE id=?");
-    $stmt->bind_param('ssssi', $name, $phone, $address, $bio, $user_id);
+    $stmt = $conn->prepare("UPDATE users SET name=?, phone=?, address=?, city=?, bio=? WHERE id=?");
+    $stmt->bind_param('sssssi', $name, $phone, $address, $city, $bio, $user_id);
     $stmt->execute();
+}
+
+/* ---------- Location matching & marketplace ranking ---------- */
+/** Normalise a city / municipality name for case- and space-insensitive comparison. */
+function normalize_city($s) {
+    return mb_strtolower(trim(preg_replace('/\s+/', ' ', (string)$s)));
+}
+/** True when two people share the same city; blank values never match. */
+function same_city($a, $b) {
+    $a = normalize_city($a);
+    $b = normalize_city($b);
+    return $a !== '' && $a === $b;
+}
+/**
+ * Marketplace ranking score for a worker row (higher = better match).
+ * Blends customer rating, experience, earned badges and how often they are
+ * hired, so the dashboard can showcase the strongest cleaners first.
+ */
+function worker_score(array $w) {
+    $rating  = (float)($w['rating'] ?? 0);
+    $jobs    = (int)($w['completed_jobs'] ?? 0);
+    $badges  = (int)($w['badge_count'] ?? 0);
+    $reviews = (int)($w['review_count'] ?? 0);
+    return round($rating * 2 + min($jobs, 100) * 0.15 + min($badges, 10) * 0.4 + min($reviews, 50) * 0.05, 3);
 }
 function change_password($user, $current, $new, $confirm) {
     global $conn;

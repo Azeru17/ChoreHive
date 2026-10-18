@@ -1,6 +1,7 @@
 <?php
 require 'config.php';
 $base = ch_base();
+$u = current_user();
 $ok = false;
 $error = '';
 
@@ -9,21 +10,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $name = v_str('name', 100, true, 'Name');
     $email = v_email();
     $message = v_str('message', 2000, true, 'Message');
-    $to = ADMIN_EMAIL !== '' ? ADMIN_EMAIL : SMTP_FROM;
-    $body = "Name: $name\nEmail: $email\n\n$message\n";
-    if ($to && filter_var($to, FILTER_VALIDATE_EMAIL)) {
-        $ok = send_app_email($to, 'ChoreHive contact form', $body, $email);
-        if (!$ok && !smtp_configured()) {
-            $ok = true;
-        }
-    } else {
-        $line = sprintf("[%s] CONTACT FROM %s <%s> | %s\n", date('Y-m-d H:i:s'), $name, $email, $message);
-        @file_put_contents(__DIR__ . '/email_outbox.log', $line, FILE_APPEND);
-        $ok = true;
-    }
-    if (!$ok) {
-        $error = 'We could not send your message right now. Please try again later.';
-    }
+    $stmt = $conn->prepare('INSERT INTO contact_messages (name, email, message) VALUES (?, ?, ?)');
+    $stmt->bind_param('sss', $name, $email, $message);
+    $ok = $stmt->execute();
+    $stmt->close();
+    if (!$ok) $error = 'We could not save your message right now. Please try again later.';
 } else {
     $error = 'Please submit the contact form from the homepage.';
 }
@@ -36,14 +27,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <title><?= $ok ? 'Message sent' : 'Contact' ?> — ChoreHive</title>
 <link rel="stylesheet" href="https://www.w3schools.com/w3css/5/w3.css">
 <style>body{background:#f4f7fc;font-family:Poppins,sans-serif}</style>
+<link rel="stylesheet" href="<?= $base ?>/assets/css/chorehive-ui.css?v=<?= filemtime(__DIR__ . '/assets/css/chorehive-ui.css') ?>">
 </head>
 <body>
-<div class="w3-container" style="max-width:560px;margin:80px auto;text-align:center;">
+<header class="site-header">
+  <a class="site-brand" href="<?= $base ?>/index.php">
+    <img src="<?= $base ?>/assets/logo.png" alt="ChoreHive logo">
+    <span>ChoreHive</span>
+  </a>
+  <nav class="site-nav" id="siteNav" aria-label="Main navigation">
+    <a href="<?= $base ?>/index.php#showcase">Showcase</a>
+    <a href="<?= $base ?>/index.php#services">Services</a>
+    <a href="<?= $base ?>/index.php#packages">Packages</a>
+    <a href="<?= $base ?>/workers.php">Our Workers</a>
+  </nav>
+  <div class="site-actions">
+    <?php if ($u): ?>
+      <a class="btn-honey" href="<?= $base ?>/<?= e($u['role']) ?>/dashboard.php">My Dashboard</a>
+    <?php else: ?>
+      <a class="btn-dark" href="<?= $base ?>/login.php">Log In</a>
+      <a class="btn-honey" href="<?= $base ?>/register.php">Get Started</a>
+    <?php endif; ?>
+    <button class="site-burger" id="siteBurger" type="button" aria-label="Toggle navigation menu" aria-controls="siteNav" aria-expanded="false">&#9776;</button>
+  </div>
+</header>
+<div class="w3-container" style="max-width:560px;margin:40px auto;text-align:center;">
   <div class="w3-card w3-white w3-round w3-padding-32">
     <img src="<?= $base ?>/assets/logo.png" alt="ChoreHive logo" style="width:74px;height:74px;border-radius:50%;box-shadow:0 0 0 3px rgba(224,170,51,.55);margin-bottom:8px;">
     <?php if ($ok): ?>
       <h2>Thanks, <?= e($name ?? 'friend') ?>!</h2>
-      <p>Your message has been sent. We'll get back to you at <b><?= e($email ?? '') ?></b> soon.</p>
+      <p>Your message was received. An administrator can review it and reply to <b><?= e($email ?? '') ?></b>.</p>
     <?php else: ?>
       <h2>Could not send</h2>
       <p><?= e($error) ?></p>
@@ -51,5 +64,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <a class="w3-button w3-padding-large" style="background:#e0aa33;color:#241d12;border-radius:10px;font-weight:700;" href="<?= $base ?>/index.php">← Back to home</a>
   </div>
 </div>
+<script>
+/* Mobile navigation (burger -> dropdown panel) */
+(function () {
+  const burger = document.getElementById("siteBurger");
+  const nav = document.getElementById("siteNav");
+  if (!burger || !nav) return;
+  const setOpen = (open) => {
+    nav.classList.toggle("open", open);
+    burger.setAttribute("aria-expanded", open ? "true" : "false");
+  };
+  burger.addEventListener("click", () => setOpen(!nav.classList.contains("open")));
+  nav.addEventListener("click", (ev) => { if (ev.target.closest("a")) setOpen(false); });
+  document.addEventListener("keydown", (ev) => { if (ev.key === "Escape") setOpen(false); });
+  window.addEventListener("resize", () => { if (window.innerWidth > 900) setOpen(false); });
+})();
+</script>
 </body>
 </html>

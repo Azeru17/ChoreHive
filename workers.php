@@ -63,18 +63,10 @@ uasort($cats, function ($a, $b) {
   .btn-dark:hover { background:linear-gradient(180deg,#17427a,var(--navy-dark)) !important; transform:translateY(-2px); }
   @keyframes rise { from{opacity:0;transform:translateY(20px)} to{opacity:1;transform:none} }
 
-  /* Top bar */
-  .topbar { background:rgba(255,255,255,.92); -webkit-backdrop-filter:blur(14px); backdrop-filter:blur(14px);
-            border-bottom:1px solid var(--line-2); position:sticky; top:0; z-index:10; }
-  .topbar .inner { max-width:1140px; margin:0 auto; padding:12px 20px; display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
-  .brand { display:flex; align-items:center; gap:10px; font-weight:700; color:var(--navy); text-decoration:none; font-size:1.1rem; }
-  .brand img { width:40px; height:40px; border-radius:50%; box-shadow:0 0 0 2px rgba(224,170,51,.55); }
-  .spacer { flex:1 1 auto; }
-  .navlink { color:#4a5a73; text-decoration:none; font-weight:600; font-size:.92rem; padding:8px 12px; border-radius:10px; transition:background var(--fast) var(--ease); }
-  .navlink:hover { background:#eef3fb; color:var(--navy); }
+  /* Top bar is provided by the shared .site-header component (chorehive-ui.css) */
 
   .wrap { max-width:1140px; margin:0 auto; padding:0 20px; }
-  .hero { padding:56px 0 8px; animation:rise .6s var(--ease) both; }
+  .hero { padding:30px 0 8px; animation:rise .6s var(--ease) both; }
   .hero h1 { line-height:1.1; letter-spacing:-.03em; margin:0; }
   hr.honey { width:56px; border:5px solid var(--honey); border-radius:99px; margin-top:18px; }
   .stats { display:flex; gap:26px; flex-wrap:wrap; margin-top:26px; }
@@ -116,10 +108,6 @@ uasort($cats, function ($a, $b) {
   .t3{background:linear-gradient(135deg,#2a5a9e,#17427a)} .t4{background:linear-gradient(135deg,#0f2d55,#17427a)}
   .t5{background:linear-gradient(135deg,#e0aa33,#b8860b)} .t6{background:linear-gradient(135deg,#cfe0f5,#9dc0ea)}
   @media (max-width: 760px) {
-    .topbar .inner { gap:6px; padding:10px 14px; }
-    .topbar .spacer { display:none; }
-    .topbar .brand { flex:1 0 100%; }
-    .topbar .navlink { flex:1 1 auto; text-align:center; padding:9px 8px; }
     .wrap { padding-inline:14px; }
     .hero { padding-top:36px; }
     .stats { gap:12px 20px; }
@@ -136,25 +124,31 @@ uasort($cats, function ($a, $b) {
     .fbtn { padding-inline:11px; }
   }
 </style>
+<link rel="stylesheet" href="<?= $base ?>/assets/css/chorehive-ui.css?v=<?= filemtime(__DIR__ . '/assets/css/chorehive-ui.css') ?>">
 </head>
 <body>
 
-<div class="topbar">
-  <div class="inner">
-    <a class="brand" href="<?= $base ?>/index.php">
-      <img src="<?= $base ?>/assets/logo.png" alt="ChoreHive logo">Chore<span class="honey">Hive</span>
-    </a>
-    <div class="spacer"></div>
-    <a class="navlink" href="<?= $base ?>/index.php#services">Services</a>
-    <a class="navlink" href="<?= $base ?>/index.php#packages">Packages</a>
+<header class="site-header">
+  <a class="site-brand" href="<?= $base ?>/index.php">
+    <img src="<?= $base ?>/assets/logo.png" alt="ChoreHive logo">
+    <span>Chore<span class="honey">Hive</span></span>
+  </a>
+  <nav class="site-nav" id="siteNav" aria-label="Main navigation">
+    <a href="<?= $base ?>/index.php#showcase">Showcase</a>
+    <a href="<?= $base ?>/index.php#services">Services</a>
+    <a href="<?= $base ?>/index.php#packages">Packages</a>
+    <a href="<?= $base ?>/contact.php">Contact</a>
+  </nav>
+  <div class="site-actions">
     <?php if ($u): ?>
-      <a class="w3-button btn-honey" href="<?= $base ?>/<?= e($u['role']) ?>/dashboard.php">My Dashboard →</a>
+      <a class="btn-honey" href="<?= $base ?>/<?= e($u['role']) ?>/dashboard.php">My Dashboard</a>
     <?php else: ?>
-      <a class="navlink" href="<?= $base ?>/login.php">Log In</a>
-      <a class="w3-button btn-honey" href="<?= $base ?>/register.php">Get Started — Free</a>
+      <a class="btn-dark" href="<?= $base ?>/login.php">Log In</a>
+      <a class="btn-honey" href="<?= $base ?>/register.php">Get Started</a>
     <?php endif; ?>
+    <button class="site-burger" id="siteBurger" type="button" aria-label="Toggle navigation menu" aria-controls="siteNav" aria-expanded="false">&#9776;</button>
   </div>
-</div>
+</header>
 
 <main class="wrap">
   <div class="hero">
@@ -195,7 +189,7 @@ uasort($cats, function ($a, $b) {
           <div class="wtop <?= $tints[$i % 6] ?>"><span class="avatar"><?= e(ch_initials($w['name'])) ?></span></div>
           <div class="wbody">
             <h3><?= e($w['name']) ?></h3>
-            <p class="wmeta"><?= e(ch_worker_status($w)) ?></p>
+            <p class="wmeta"><?= e(ch_worker_status($w)) ?><?= !empty($w['city']) ? ' · 📍 ' . e($w['city']) : '' ?></p>
             <p class="wbio"><?= $w['bio'] ? e($w['bio']) : 'A ChoreHive worker profile, ready to receive bookings.' ?></p>
 
             <?php if ($w['badges']): ?>
@@ -220,7 +214,7 @@ uasort($cats, function ($a, $b) {
 
   <p style="text-align:center;margin-top:40px;">
     <?php if ($u && $u['role'] === 'client'): ?>
-      <a class="w3-button btn-honey w3-padding-large" href="<?= $base ?>/client/book.php">Book a listed cleaner →</a>
+      <a class="w3-button btn-honey w3-padding-large" href="<?= $base ?>/client/workers.php">Choose a listed cleaner →</a>
     <?php elseif (!$u): ?>
       <a class="w3-button btn-honey w3-padding-large" href="<?= $base ?>/register.php">Sign up and book →</a>
     <?php endif; ?>
@@ -273,6 +267,22 @@ uasort($cats, function ($a, $b) {
       apply();
     });
   }
+})();
+</script>
+<script>
+/* Mobile navigation (burger -> dropdown panel) */
+(function () {
+  const burger = document.getElementById("siteBurger");
+  const nav = document.getElementById("siteNav");
+  if (!burger || !nav) return;
+  const setOpen = (open) => {
+    nav.classList.toggle("open", open);
+    burger.setAttribute("aria-expanded", open ? "true" : "false");
+  };
+  burger.addEventListener("click", () => setOpen(!nav.classList.contains("open")));
+  nav.addEventListener("click", (ev) => { if (ev.target.closest("a")) setOpen(false); });
+  document.addEventListener("keydown", (ev) => { if (ev.key === "Escape") setOpen(false); });
+  window.addEventListener("resize", () => { if (window.innerWidth > 900) setOpen(false); });
 })();
 </script>
 </body>
