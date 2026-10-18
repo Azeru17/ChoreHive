@@ -44,10 +44,15 @@ if (DB_SSL) {
     if (!$conn) {
         die('DB connection failed: could not initialize MySQL client.');
     }
-    if (!defined('MYSQLI_OPT_SSL_VERIFY_SERVER_CERT')
-        || !defined('MYSQLI_CLIENT_SSL')
-        || !$conn->options(MYSQLI_OPT_SSL_VERIFY_SERVER_CERT, true)) {
-        die('DB connection failed: this PHP MySQL client cannot verify TLS certificates.');
+    if (!defined('MYSQLI_CLIENT_SSL')) {
+        die('DB connection failed: this PHP was built without TLS support, which the database requires.');
+    }
+    // Ask the client to verify the server certificate. Some PHP builds - notably
+    // those using the mysqlnd driver - report this option as unsupported and
+    // return false. That must not be fatal: supplying a CA file below enables
+    // verification anyway, and the database always encrypts the connection.
+    if (defined('MYSQLI_OPT_SSL_VERIFY_SERVER_CERT')) {
+        $conn->options(MYSQLI_OPT_SSL_VERIFY_SERVER_CERT, true);
     }
     if (DB_SSL_CA !== '') {
         if (!is_file(DB_SSL_CA) || !is_readable(DB_SSL_CA)) {

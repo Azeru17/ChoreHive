@@ -50,62 +50,50 @@ you can see exactly what is missing.
 
 ---
 
-## 2. Create the schema
+## 2. Create the schema and load the data
 
-### Fastest path — paste into the TiDB web SQL editor
+### Easiest path — one command (recommended)
 
-Generate the file locally, then paste it into the **SQL Editor** in the TiDB
-Cloud console:
+**Do not use the TiDB web SQL editor for this.** It cannot reliably run a
+whole multi-statement `.sql` file; a pasted script commonly fails with
+`Table 'chorehive.chat_messages' doesn't exist` because the editor runs only a
+fragment and the `CREATE TABLE` statements never happen.
+
+Instead, do this:
+
+1. Copy `tidb.local.example.php` to `tidb.local.php` and paste your TiDB
+   details into it. Find them in the TiDB Cloud console:
+   **cluster → Connect → MySQL**.
+2. Run one command:
 
 ```bash
-php tools/export_sql.php --demo-only --out=tidb_demo_data.sql
+php tools/setup_database.php
 ```
 
-Open the file, copy everything, paste it into the TiDB SQL editor, and run it.
-One file, no extra tools, nothing to install.
+It reads your local working database, creates all 22 tables on TiDB, loads the
+sample data, verifies the result, and prints the exact values to add to Vercel.
+Pass `--schema-only` for a genuinely empty database.
 
-- `tidb_demo_data.sql` — full schema **plus** sample data (recommended for a
-  demo or defence, so the dashboards are not empty)
-- `php tools/export_sql.php --out=tidb_schema.sql` — schema only, if you want a
-  genuinely empty database
+> Requires XAMPP running locally, so the exporter has a database to read.
 
-The export is read back out of a running database with `SHOW CREATE TABLE` and
-ordered by foreign-key dependency, so it always matches the schema the app
-actually runs against. Every statement is `DROP`/`CREATE`-based, so re-running
-it just rebuilds the tables.
+Re-running it is safe: every statement is `DROP`/`CREATE`-based, so it just
+rebuilds the tables.
 
-> **If the web editor reports something like
-> `Table 'chorehive.chat_messages' doesn't exist`, stop.** The editor's
-> statement splitter mis-parsed the paste and only ran part of the script, so
-> the `CREATE TABLE` statements never executed. Split the file and paste the
-> parts in order instead:
->
-> ```bash
-> php tools/export_sql.php --demo-only --out=tidb_import.sql --split=5
-> ```
->
-> That writes `tidb_import_part1.sql` … `tidb_import_part5.sql`. Paste
-> **part1, then part2, … part5**, in that order. Every part is independently
-> runnable and repeats `CREATE DATABASE` / `USE`, so you cannot end up in the
-> wrong schema.
+### If you prefer the web SQL editor
 
-> TiDB Cloud's **Import** page only accepts CSV, and the **SQL Files** tab in
-> the SQL editor is for saving your own queries, so neither can run a `.sql`
-> file. Pasting is the only in-browser option, and if it misbehaves use the
-> one-command route below instead.
+TiDB Cloud's **Import** page accepts CSV only, and the **SQL Files** tab is for
+saving your own queries, so neither can run a `.sql` file. Pasting is the only
+in-browser option, and it is fragile. If you still want to try it, split the
+script into small, independently runnable parts and paste them in order:
 
-### Recommended — one command from your machine
-
-This is more reliable than pasting, because the runner executes each statement
-individually and reports exactly what failed. Set the variables once:
-
-```powershell
-$env:DB_HOST="<HOST>"; $env:DB_PORT="4000"; $env:DB_USER="<USER>"
-$env:DB_PASS="<PASSWORD>"; $env:DB_NAME="chorehive"; $env:DB_SSL="1"
-
-php tools/migrate.php            # creates the schema
-php tools/seed_demo_data.php     # loads the sample data, including photos
+```bash
+php tools/export_sql.php --demo-only --out=tidb_import.sql --split=5
 ```
+
+That writes `tidb_import_part1.sql` … `tidb_import_part5.sql`. Paste **part1,
+then part2, … part5**. Each part repeats `CREATE DATABASE` / `USE`, so you
+cannot end up in the wrong schema. If any part reports a missing table, the
+editor dropped statements again — use the one-command path above instead.
 
 ### Alternative — plain MySQL client
 
@@ -114,7 +102,8 @@ mysql --host=<HOST> --port=4000 --user=<USER> --password \
       --ssl-mode=VERIFY_IDENTITY --ssl-ca=ca.pem < db.production.sql
 ```
 
-All three routes end with the same verification block:
+The command-line routes end with the same verification block that
+`php tools/migrate.php --check` prints:
 
 ```
 --- schema check ---
@@ -129,7 +118,11 @@ RESULT: ready
 
 ---
 
-## 3. Load the demo data (optional, recommended for a defence/demo)
+## 3. Load the demo data (skipped if you used the one-command path)
+
+> Step 2's `php tools/setup_database.php` already loads the sample data. Only
+> do this if you created the schema on its own (`--schema-only`) or with the
+> MySQL client and now want sample rows.
 
 ```bash
 php tools/seed_demo_data.php
