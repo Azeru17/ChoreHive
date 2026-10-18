@@ -58,16 +58,30 @@ Generate the file locally, then paste it into the **SQL Editor** in the TiDB
 Cloud console:
 
 ```bash
-php tools/export_sql.php --demo-only --out=tidb_demo_data.sql
+php tools/export_sql.php --demo-only --for-editor --out=tidb_editor.sql
 ```
 
-Open the file, copy everything, paste it into the TiDB SQL editor, and run it.
-One file, no extra tools, nothing to install.
+1. In the TiDB Cloud console, open the **SQL Editor** and check the database
+   selector at the top. Note the name (usually `test`).
+2. Open `tidb_editor.sql`, copy everything, paste it into the editor, and run.
+3. In Vercel, set `DB_NAME` to that same database name.
 
-- `tidb_demo_data.sql` — full schema **plus** sample data (recommended for a
-  demo or defence, so the dashboards are not empty)
-- `php tools/export_sql.php --out=tidb_schema.sql` — schema only, if you want a
-  genuinely empty database
+This file deliberately contains **no `CREATE DATABASE` and no `USE`**. The
+TiDB Cloud user usually does not have `CREATE` privilege on the server, so a
+`USE chorehive` header fails with `Unknown database 'chorehive'`. Without those
+lines the script simply applies to whichever database the editor is already
+connected to.
+
+> If you would rather the database be called `chorehive`, create it from the
+> TiDB console's "New Schema" button first, select it in the editor, paste the
+> same file, and set `DB_NAME=chorehive`.
+
+`tidb_editor.sql` holds the full schema **plus** sample data, so the dashboards
+are not empty on a demo or defence. For a genuinely empty database:
+
+```bash
+php tools/export_sql.php --for-editor --out=tidb_editor.sql   # schema only
+```
 
 The export is read back out of a running database with `SHOW CREATE TABLE` and
 ordered by foreign-key dependency, so it always matches the schema the app

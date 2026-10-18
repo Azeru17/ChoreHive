@@ -35,7 +35,18 @@ $withData = in_array('--data', $argvList, true) || in_array('--demo-only', $argv
 $withBinary = in_array('--binary', $argvList, true);
 $demoOnly = in_array('--demo-only', $argvList, true);
 
-$out = 'tidb_schema.sql';
+/**
+ * For the TiDB Cloud web SQL editor.
+ *
+ * The console runs against whichever database is selected in its dropdown
+ * (usually `test`), and the cloud user generally lacks CREATE privilege on
+ * the server, so a `CREATE DATABASE` + `USE chorehive` header fails with
+ * "Unknown database". Emitting neither line means the statements simply apply
+ * to the database the editor is already connected to.
+ */
+$forEditor = in_array('--for-editor', $argvList, true);
+
+$out = $forEditor ? 'tidb_editor.sql' : 'tidb_schema.sql';
 foreach ($argvList as $a) {
     if (strpos($a, '--out=') === 0) {
         $out = substr($a, 6);
@@ -137,9 +148,17 @@ if ($binaryTables && !$withBinary) {
 }
 $lines[] = "-- ---------------------------------------------------------------------";
 $lines[] = "";
-$lines[] = "CREATE DATABASE IF NOT EXISTS `{$dbName}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;";
-$lines[] = "USE `{$dbName}`;";
-$lines[] = "";
+if ($forEditor) {
+    $lines[] = "-- IMPORTANT: make sure the database selector at the top of the SQL editor";
+    $lines[] = "-- points at the database you want (it is usually 'test'). This file does NOT";
+    $lines[] = "-- create or switch databases, so it applies to whatever is selected there.";
+    $lines[] = "-- Afterwards, set DB_NAME in Vercel to that same database name.";
+    $lines[] = "";
+} else {
+    $lines[] = "CREATE DATABASE IF NOT EXISTS `{$dbName}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;";
+    $lines[] = "USE `{$dbName}`;";
+    $lines[] = "";
+}
 $lines[] = "SET FOREIGN_KEY_CHECKS = 0;";
 $lines[] = "";
 
