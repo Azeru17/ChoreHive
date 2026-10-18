@@ -357,12 +357,40 @@ body.adminpage .table-wrap th, body.adminpage .table-wrap td {
 body.adminpage .table-wrap th { font-size: .68rem; letter-spacing: .03em; }
 /* Wide admin data tables use a fixed layout with explicit column widths so all
    columns FIT the content width instead of running off the right edge. */
-body.adminpage table.fixed-cols { table-layout: fixed; }
-body.adminpage table.fixed-cols th, body.adminpage table.fixed-cols td { overflow-wrap: anywhere; word-break: normal; }
-/* Compact the assign-worker control so it fits its cell. */
-body.adminpage .admin-assignment-form { flex-wrap: wrap; gap: 5px; align-items: center; }
-body.adminpage .admin-assignment-form select { flex: 1 1 120px; width: 100%; max-width: 100%; min-width: 0; box-sizing: border-box; }
-body.adminpage .admin-assignment-form .btn { padding: 6px 11px; font-size: .78rem; white-space: nowrap; }
+/* Nine columns cannot be squeezed into a narrow admin container without
+   mangling every cell ("PAY-4A7CA / C", the Save button pushed out of its
+   row). Below the comfortable width the table now scrolls as one unit
+   instead of collapsing into unreadable stacks. */
+body.adminpage .table-wrap > table.fixed-cols { table-layout: fixed; min-width: 940px; }
+body.adminpage table.fixed-cols th, body.adminpage table.fixed-cols td { word-break: normal; }
+/* `anywhere` breaks mid-word; `break-word` only breaks a token that truly
+   cannot fit, which keeps payment references and addresses readable. */
+body.adminpage table.fixed-cols td { overflow-wrap: break-word; }
+/* The assign control must stay on ONE line. Previously `width:100%` on the
+   select plus `flex-wrap:wrap` pushed the Save button onto its own row, which
+   made every booking row twice as tall and left the columns looking ragged. */
+body.adminpage .admin-assignment-form { display: flex; flex-wrap: nowrap; gap: 6px; align-items: center; }
+body.adminpage .admin-assignment-form select { flex: 1 1 auto; width: auto; max-width: 100%; min-width: 0; box-sizing: border-box; }
+body.adminpage .admin-assignment-form .btn { flex: 0 0 auto; padding: 6px 13px; font-size: .78rem; white-space: nowrap; }
+/* Booking rows read cleaner when the identifier never breaks and every cell
+   shares one baseline, padding and alignment. */
+body.adminpage table.fixed-cols th,
+body.adminpage table.fixed-cols td { vertical-align: middle; padding: 12px 10px; }
+body.adminpage table.fixed-cols td:first-child,
+body.adminpage table.fixed-cols th:first-child { white-space: nowrap; }
+body.adminpage table.fixed-cols td:first-child { font-variant-numeric: tabular-nums; font-weight: 700; color: #183657; }
+body.adminpage table.fixed-cols td:last-child,
+body.adminpage table.fixed-cols th:last-child { text-align: center; }
+body.adminpage table.fixed-cols td > small { display: block; margin-top: 3px; }
+/* Headings must never break mid-word ("PAYME / NT"). */
+body.adminpage table.fixed-cols th {
+  white-space: nowrap; overflow-wrap: normal; word-break: normal;
+  font-size: .68rem; letter-spacing: .04em;
+}
+/* Payment reference should never dominate a row. */
+body.adminpage table.fixed-cols td small { word-break: break-all; font-size: .72rem; line-height: 1.35; }
+/* Tell the admin the last columns live off-screen on a narrow window. */
+body.adminpage .table-scroll-hint { margin: 10px 2px 0; color: var(--muted, #6b7a90); font-size: .78rem; }
 /* Keep long admin headings/actions from colliding at common laptop widths. */
 body.adminpage .container { min-width: 0; width: auto; }
 body.adminpage .container h1 { max-width: 100%; }

@@ -103,7 +103,7 @@ $pinnedBookings = (int)$conn->query("SELECT COUNT(*) c FROM bookings WHERE addre
   <?php endif; ?>
   <div class="table-wrap">
   <table class="fixed-cols">
-    <colgroup><col style="width:4%"><col style="width:10%"><col style="width:13%"><col style="width:11%"><col style="width:15%"><col style="width:9%"><col style="width:11%"><col style="width:20%"><col style="width:7%"></colgroup>
+    <colgroup><col style="width:5%"><col style="width:11%"><col style="width:12%"><col style="width:11%"><col style="width:12%"><col style="width:9%"><col style="width:11%"><col style="width:21%"><col style="width:8%"></colgroup>
     <tr><th>ID</th><th>Client</th><th>Service</th><th>Schedule</th><th>Location</th><th>Status</th><th>Payment</th><th>Assign worker</th><th></th></tr>
     <?php while ($b = $res->fetch_assoc()): ?>
     <tr>
@@ -116,7 +116,7 @@ $pinnedBookings = (int)$conn->query("SELECT COUNT(*) c FROM bookings WHERE addre
       <td><?= e($b['payment_status'] === 'demo_paid' ? 'demo-paid · no money transferred' : $b['payment_status']) ?><br><small class="muted"><?= e(ucfirst($b['payment_method'])) ?></small><?php if ($b['payment_reference']): ?><br><small class="muted"><?= e($b['payment_reference']) ?></small><?php endif; ?></td>
       <td>
         <?php if ($b['status'] === 'cancelled' && $b['worker_id'] !== null): ?><span class="muted">Customer cancelled</span><?php else: ?>
-        <form method="post" class="admin-assignment-form" style="display:flex;gap:6px;">
+        <form method="post" class="admin-assignment-form">
           <?= csrf_field() ?>
           <input type="hidden" name="assign" value="<?= $b['id'] ?>">
           <select name="worker_id" aria-label="Assign worker for booking #<?= (int)$b['id'] ?>" style="margin:0;">
@@ -138,5 +138,6 @@ $pinnedBookings = (int)$conn->query("SELECT COUNT(*) c FROM bookings WHERE addre
     <?php endwhile; ?>
   </table>
   </div>
+  <?php if ($res->num_rows > 0): ?><p class="table-scroll-hint">Scroll the table sideways to reach the worker assignment and delete actions.</p><?php endif; ?>
 </div>
 <?php require '../footer.php'; ?>
