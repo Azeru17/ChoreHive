@@ -2,6 +2,35 @@
 require '../config.php';
 $u = require_role('client');
 
+/* Self-service account deletion: preserve transaction history while anonymizing personal details. */
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_my_account'])) {
+    verify_csrf();
+    $pw = (string)($_POST['delete_password'] ?? '');
+    $roleForDelete = 'client';
+    $check = $conn->prepare("SELECT password, avatar FROM users WHERE id=? AND role=?");
+    $check->bind_param('is', $u['id'], $roleForDelete);
+    $check->execute();
+    $account = $check->get_result()->fetch_assoc();
+    if (!$account || !password_verify($pw, $account['password'])) fail('Password did not match. Your account was not deleted.');
+    if (!empty($account['avatar'])) media_delete($account['avatar']);
+    $newName = 'Deleted account #' . (int)$u['id'];
+    $newEmail = 'deleted-client-' . (int)$u['id'] . '-' . bin2hex(random_bytes(4)) . '@deleted.invalid';
+    $randomPassword = password_hash(bin2hex(random_bytes(32)), PASSWORD_DEFAULT);
+    $st = $conn->prepare("UPDATE users SET name=?, email=?, password=?, phone=NULL, address=NULL, city=NULL, bio=NULL, avatar=NULL, worker_approved=0 WHERE id=?");
+    $st->bind_param('sssi', $newName, $newEmail, $randomPassword, $u['id']);
+    $st->execute();
+    if ('client' === 'worker') {
+      $del = $conn->prepare("DELETE FROM worker_portfolio WHERE worker_id=?");
+      if ($del) { $del->bind_param('i',$u['id']); $del->execute(); }
+    }
+    audit_log('account_self_deleted', "User #".(int)$u['id']." requested account deletion; personal profile fields anonymized and historical records retained");
+    $_SESSION = [];
+    if (ini_get('session.use_cookies')) { $params=session_get_cookie_params(); setcookie(session_name(),'',time()-42000,$params['path'],$params['domain'],$params['secure'],$params['httponly']); }
+    session_destroy();
+    header('Location: ../login.php?account_deleted=1'); exit;
+}
+
+
 /* ---------- Actions (before output so redirects work) ---------- */
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_profile'])) {
     verify_csrf();
@@ -95,7 +124,7 @@ require '../layout.php';
 <div class="card">
   <div class="profile-head">
     <?php if ($av): ?>
-      <img class="avatar" src="<?= e($av) ?>" alt="Profile picture">
+      <img class="avatar profile-zoom-trigger" src="<?= e($av) ?>" alt="Profile picture" title="Click to enlarge" tabindex="0" role="button" aria-label="Enlarge profile picture">
     <?php else: ?>
       <div class="avatar"><?= e(initials($u['name'])) ?></div>
     <?php endif; ?>
@@ -162,7 +191,7 @@ require '../layout.php';
             <b><?= e($sa['label']) ?></b>
             <div class="muted" style="font-size:.9rem;"><?= e($sa['address']) ?></div>
             <?php if ($sa['address_lat'] && $sa['address_lng']): ?>
-              <a class="muted" style="font-size:.82rem;" href="https://www.openstreetmap.org/?mlat=<?= e($sa['address_lat']) ?>&mlon=<?= e($sa['address_lng']) ?>#map=16/<?= e($sa['address_lat']) ?>/<?= e($sa['address_lng']) ?>" target="_blank" rel="noopener">View pinned location ↗</a>
+              <a class="muted" style="font-size:.82rem;" href="https://www.google.com/maps/search/?api=1&amp;query=<?= rawurlencode((string)$sa['address_lat'] . ',' . (string)$sa['address_lng']) ?>" target="_blank" rel="noopener">View pinned location ↗</a>
             <?php endif; ?>
           </div>
           <form method="post" style="margin:0;">
@@ -207,4 +236,16 @@ function editAddr(id, label, address, lat, lng) {
   window.scrollTo({top: document.getElementById('addressbook').offsetTop - 20, behavior: 'smooth'});
 }
 </script>
+
+<div class="card" style="margin-top:18px;border:1px solid #f1b7b7;">
+  <h2 style="color:#b42318;">Delete my account</h2>
+  <p class="muted">No administrator approval is required. To preserve booking, payment, and audit records, your personal profile details will be anonymized and you will be signed out. This action cannot be undone.</p>
+  <form method="post" data-confirm="Delete your account and anonymize your profile? You will be signed out and cannot log in again." data-confirm-title="Delete my account" data-confirm-yes="Delete account">
+    <?= csrf_field() ?>
+    <label for="delete_password">Confirm your current password</label>
+    <input id="delete_password" type="password" name="delete_password" required autocomplete="current-password">
+    <button class="btn" style="background:#b42318;border-color:#b42318;margin-top:10px;" name="delete_my_account" value="1">Delete my account</button>
+  </form>
+</div>
+
 <?php require '../footer.php'; ?>

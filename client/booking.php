@@ -166,7 +166,7 @@ if ($b['status'] !== 'completed'
     && paymongo_sync_booking($b)) {
     $b = $conn->query("SELECT b.*, s.name service, s.description sdesc, u.id worker_user_id, u.name worker, u.phone worker_phone, u.email worker_email FROM bookings b
       JOIN services s ON s.id=b.service_id LEFT JOIN users u ON u.id=b.worker_id
-      WHERE b.id=$id AND b.client_id={$u['id']}")->fetch_assoc();
+      WHERE b.id=" . (int)$id . " AND b.client_id=" . (int)$u['id'])->fetch_assoc();
     $wasCancelled = $b['status'] === 'cancelled';
     flash($wasCancelled
         ? 'Payment received for this cancelled booking. It remains cancelled and the payment is not automatically refunded; contact support for help.'
@@ -175,8 +175,8 @@ if ($b['status'] !== 'completed'
 
 $title = 'Booking #' . $id;
 require '../layout.php';
-$items = $conn->query("SELECT * FROM checklist_items WHERE booking_id=$id");
-$photos = $conn->query("SELECT * FROM booking_photos WHERE booking_id=$id");
+$items = $conn->query("SELECT * FROM checklist_items WHERE booking_id=" . (int)$id);
+$photos = $conn->query("SELECT * FROM booking_photos WHERE booking_id=" . (int)$id);
 $before = []; $after = [];
 while ($p = $photos->fetch_assoc()) {
     if ($p['stage'] === 'before') { $before[] = $p; } else { $after[] = $p; }
@@ -194,7 +194,7 @@ $fb = $conn->query("SELECT * FROM feedback WHERE booking_id=$id")->fetch_assoc()
     </p>
   <?php endif; ?>
   <p><b>Address:</b> <?= e($b['address']) ?> &nbsp; <b>Total:</b> ₱<?= number_format($b['total_price'], 2) ?></p>
-  <?php if ($b['address_lat'] !== null && $b['address_lng'] !== null): ?><p><b>Map pin:</b> <a target="_blank" rel="noopener" href="https://www.openstreetmap.org/?mlat=<?= e((string)$b['address_lat']) ?>&amp;mlon=<?= e((string)$b['address_lng']) ?>#map=17/<?= e((string)$b['address_lat']) ?>/<?= e((string)$b['address_lng']) ?>">Open pinned location ↗</a></p><?php endif; ?>
+  <?php if ($b['address_lat'] !== null && $b['address_lng'] !== null): ?><p><b>Map pin:</b> <a target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&amp;query=<?= rawurlencode((string)$b['address_lat'] . ',' . (string)$b['address_lng']) ?>">Open pinned location ↗</a></p><?php endif; ?>
   <p><b>Status:</b> <span class="badge <?= status_class($b['status']) ?>"><?= str_replace('_',' ',$b['status']) ?></span>
      <b style="margin-left:16px;">Payment:</b> <?= e(ucfirst($b['payment_method'])) ?> · <?= e($b['payment_status'] === 'demo_paid' ? 'demo-paid · no money transferred' : $b['payment_status']) ?></p>
   <?php if ($b['status'] === 'cancelled' && !empty($b['cancel_reason'])): ?>
@@ -347,7 +347,7 @@ $fb = $conn->query("SELECT * FROM feedback WHERE booking_id=$id")->fetch_assoc()
       <label>Comment</label><textarea name="comment" rows="2"><?= e($fb['comment'] ?? '') ?></textarea>
       <button>Submit feedback</button>
     </form>
-    <p style="margin-top:10px;"><a class="btn" href="bookings.php?rebook=<?= $id ?>">🔁 Book this again</a></p>
+    <form method="post" action="bookings.php" style="margin-top:10px;"><?= csrf_field() ?><button class="btn" name="rebook" value="<?= (int)$id ?>">🔁 Book this again</button></form>
   <?php endif; ?>
 </div>
 <div id="lightbox" role="dialog" aria-modal="true" aria-label="Enlarged booking photo" aria-hidden="true"><img id="lightbox-img" src="" alt="Enlarged photo" tabindex="-1"></div>

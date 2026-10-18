@@ -4,7 +4,7 @@ $u = require_role('admin');
 
 /* ---------- CSV export ---------- */
 if (isset($_GET['export'])) {
-    $kind = $_GET['export'];
+    $kind = is_string($_GET['export']) ? $_GET['export'] : '';
     $rows = [];
     $filename = 'chorehive-' . $kind . '-' . date('Ymd') . '.csv';
     if ($kind === 'bookings') {
@@ -75,7 +75,10 @@ $repeat_rate = (int)$repeat_stats['completed_total'] > 0
   : 0;
 
 /* Worker schedule calendar: upcoming assigned/in-progress jobs */
-$month = isset($_GET['m']) ? DateTime::createFromFormat('Y-m', $_GET['m']) : new DateTime();
+$monthParam = isset($_GET['m']) && is_string($_GET['m']) ? $_GET['m'] : '';
+$month = preg_match('/\A\d{4}-(?:0[1-9]|1[0-2])\z/', $monthParam)
+    ? DateTime::createFromFormat('!Y-m', $monthParam)
+    : false;
 if (!$month) $month = new DateTime();
 $month_start = (clone $month)->modify('first day of this month');
 $prev = (clone $month)->modify('-1 month')->format('Y-m');

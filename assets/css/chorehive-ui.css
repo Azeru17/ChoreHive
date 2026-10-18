@@ -205,7 +205,7 @@ form button + button, form .btn + .btn { margin-inline-start: 4px; }
 .map-picker-heading p { color: #718198; font-size: .76rem; margin: 3px 0 0; }
 .map-picker-heading .btn { flex-shrink: 0; }
 .address-map { height: 300px; width: 100%; z-index: 1; border: 1px solid #dfe7ef; border-radius: 11px; overflow: hidden; background: #e9eff3; }
-.address-map .leaflet-control-attribution { font-size: 10px; }
+
 .map-picker-footer { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-top: 9px; }
 #mapPinStatus { display: block; min-width: 0; color: #718198; font-size: .73rem; line-height: 1.45; overflow-wrap: anywhere; }
 #mapPinStatus.has-pin { color: #207448; font-weight: 700; }
@@ -1097,3 +1097,45 @@ input:disabled, select:disabled, textarea:disabled { background: #f4f7fc; color:
   .site-brand img { width: 30px; height: 30px; }
   .site-actions .btn-honey, .site-actions .btn-dark { padding: 9px 13px; font-size: .9rem; }
 }
+
+
+/* Final dashboard polish: balanced cards and consistent controls. */
+body.adminpage .dash-stats .stat { min-width:0; width:100%; box-sizing:border-box; gap:12px; }
+body.adminpage .dash-stats .stat .top { display:flex; justify-content:space-between; gap:12px; min-width:0; }
+body.adminpage .dash-stats .stat .top b { overflow-wrap:anywhere; font-size:clamp(1.35rem,2vw,2rem); }
+body.adminpage .dash-stats .stat h4 { line-height:1.35; overflow-wrap:anywhere; }
+body.adminpage .admin-dashboard .btn, body.adminpage .admin-dashboard button, body.adminpage .admin-dashboard select { max-width:100%; box-sizing:border-box; }
+body.adminpage .admin-dashboard .actions, body.adminpage .admin-dashboard .market-admin-overview-heading { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+body.adminpage .admin-dashboard .table-wrap { max-width:100%; overflow-x:auto; }
+@media(max-width:680px){body.adminpage .dash-stats{grid-template-columns:minmax(0,1fr)} body.adminpage .dash-stats .stat{min-height:100px}}
+
+
+/* Global refinement pass: stable sizing, alignment, and showcase-style profile viewer. */
+ .userbox .who { min-width:0; gap:9px; }
+ .userbox .who > span:not(.avatar) { max-width:clamp(70px,12vw,180px); overflow:hidden; text-overflow:ellipsis; }
+ .userbox .who img.avatar.sm { display:block; width:36px!important; height:36px!important; min-width:36px!important; max-width:36px!important; flex:0 0 36px!important; aspect-ratio:1/1!important; border-radius:50%!important; object-fit:cover!important; object-position:center!important; overflow:hidden; }
+@media(max-width:800px){ .userbox .who img.avatar.sm{width:32px!important;height:32px!important;min-width:32px!important;max-width:32px!important;flex-basis:32px!important}}
+
+/* Reuse the homepage showcase's immersive image treatment for profile photos. */
+#profileImageViewer { position:fixed; inset:0; z-index:10000; display:none; align-items:center; justify-content:center; padding:clamp(12px,4vw,44px); background:rgba(8,22,40,.84); -webkit-backdrop-filter:blur(10px) saturate(140%); backdrop-filter:blur(10px) saturate(140%); opacity:0; transition:opacity .26s ease; }
+#profileImageViewer.is-open { display:flex; opacity:1; }
+#profileImageViewer .profile-showcase-content { position:relative; display:block; width:auto; max-width:100%; max-height:100%; margin:0; overflow:hidden; border-radius:18px; background:#0b2242; box-shadow:0 30px 70px rgba(0,0,0,.45); }
+#profileImageViewer img { display:block; width:auto; height:auto; max-width:min(88vw,1100px); max-height:84vh; object-fit:contain; transform-origin:center center; transition:transform .15s ease; }
+#profileImageViewer .profile-showcase-caption { position:absolute; left:0; right:0; bottom:0; z-index:2; display:flex; flex-direction:column; align-items:flex-start; gap:5px; padding:clamp(54px,12vh,96px) clamp(16px,3vw,28px) 18px; background:linear-gradient(to top,rgba(6,18,34,.95),rgba(6,18,34,.72) 44%,transparent); color:#fff; pointer-events:none; }
+#profileImageViewer .profile-showcase-caption b { font-size:clamp(1rem,2.4vw,1.3rem); font-weight:800; text-shadow:0 2px 12px #0008; }
+#profileImageViewer .profile-showcase-caption > span { font-size:.82rem; color:rgba(255,255,255,.88); }
+#profileImageViewer .profile-viewer-close { position:absolute; top:6px; right:8px; z-index:4; display:grid; place-items:center; width:42px; height:42px; min-height:42px; padding:0; border:0; border-radius:8px; background:rgba(8,22,40,.2); box-shadow:none; color:#fff; font-size:2.1rem; line-height:1; font-weight:300; cursor:pointer; text-shadow:0 1px 2px #000b,0 2px 12px #0009; }
+#profileImageViewer .profile-viewer-close:hover { background:rgba(255,255,255,.16); }
+#profileImageViewer .profile-viewer-controls { display:flex; gap:8px; margin-top:7px; pointer-events:auto; }
+#profileImageViewer .profile-viewer-controls button { min-width:42px; min-height:36px; padding:7px 13px; border:1px solid rgba(255,255,255,.24); border-radius:999px; background:rgba(255,255,255,.13); color:#fff; font-size:.82rem; font-weight:750; cursor:pointer; }
+#profileImageViewer .profile-viewer-controls button:hover { background:rgba(255,255,255,.25); }
+body.profile-showcase-open { overflow:hidden; }
+
+/* Consistent interactive sizing and alignment across panels, cards, forms, and modals. */
+:where(button,.btn,.btn-sec,.btn-honey,.btn-dark,input[type=submit],input[type=button]) { display:inline-flex; align-items:center; justify-content:center; gap:.45em; min-height:38px; line-height:1.25; text-align:center; vertical-align:middle; }
+:where(.card,.stat,.discover-card,.price-card,.market-admin-stat,.market-admin-overview-card,.modal,.panel) { min-width:0; }
+:where(.actions,.button-row,.form-actions,.receipt-actions,.worker-profile-actions,.discover-actions) { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+:where(.actions,.button-row,.form-actions) > :where(button,.btn,.btn-sec,input[type=submit]) { margin:0; }
+:where(input:not([type=checkbox]):not([type=radio]):not([type=file]),select,textarea) { max-width:100%; min-width:0; box-sizing:border-box; }
+:where(.card,.modal,.panel) :where(h1,h2,h3) { overflow-wrap:anywhere; }
+@media(max-width:560px){#profileImageViewer{padding:10px}#profileImageViewer .profile-showcase-content{border-radius:14px}#profileImageViewer img{max-width:94vw;max-height:80vh}#profileImageViewer .profile-viewer-close{top:2px;right:4px;width:40px;height:40px}.profile-showcase-caption{padding-bottom:14px!important}}

@@ -32,8 +32,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $finRow = $fin->get_result()->fetch_assoc();
         if (!$finRow || $finRow['status'] !== 'in_progress') fail('The job must be in progress before it can be marked done. Refresh and try again.');
         if ((int)$finRow['client_started_ack'] !== 1) fail('The client has not confirmed the job started yet. Ask them to press Confirm Job before you mark it done.');
+        $photoStmt = $conn->prepare("SELECT stage, COUNT(*) AS total FROM booking_photos WHERE booking_id=? GROUP BY stage");
+        $photoStmt->bind_param('i', $jid);
+        $photoStmt->execute();
+        $photoCounts = ['before' => 0, 'after' => 0];
+        $photoRows = $photoStmt->get_result();
+        while ($photoRow = $photoRows->fetch_assoc()) $photoCounts[$photoRow['stage']] = (int)$photoRow['total'];
+        if ($photoCounts['before'] < 1 || $photoCounts['after'] < 1) {
+            fail('Before and after photos are required before a job can be marked done. Open the job, upload both photo stages, then try again.');
+        }
         if (!advance($conn, $jid, $u['id'], 'in_progress', 'awaiting_verification')) fail('The job status changed before it could be marked done. Refresh and try again.');
-        $c = $conn->query("SELECT client_id FROM bookings WHERE id=$jid")->fetch_assoc();
+        $c = $conn->query("SELECT client_id FROM bookings WHERE id=" . (int)$jid)->fetch_assoc();
         if ($c) notify_and_email($c['client_id'], "Your booking #$jid is ready for review — check the after photos and confirm the selected payment flow.", 'Job awaiting verification', 'client/booking.php?id=' . $jid);
         audit_log('job_finished', "Worker {$u['name']} finished booking #$jid");
         flash('Job marked done. The client has been notified to review it.');
@@ -42,7 +51,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['decline'])) {
         $jid = v_int('decline', 1, PHP_INT_MAX, 'Job');
         $row = $conn->query("SELECT b.*, s.name service FROM bookings b JOIN services s ON s.id=b.service_id
-                             WHERE b.id=$jid AND b.worker_id={$u['id']}")->fetch_assoc();
+                             WHERE b.id=" . (int)$jid . " AND b.worker_id=" . (int)$u['id'])->fetch_assoc();
         if (!$row) fail('Job not found.');
         if ($row['status'] !== 'assigned') fail('You can only decline a job that has not been started.');
         if ($row['payment_method'] !== 'cash' || $row['payment_status'] !== 'unpaid') {
@@ -71,7 +80,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['delete_job'])) {
         $jid = v_int('delete_job', 1, PHP_INT_MAX, 'Job');
         $row = $conn->query("SELECT b.*, s.name service FROM bookings b JOIN services s ON s.id=b.service_id
-                             WHERE b.id=$jid AND b.worker_id={$u['id']}")->fetch_assoc();
+                             WHERE b.id=" . (int)$jid . " AND b.worker_id=" . (int)$u['id'])->fetch_assoc();
         if (!$row) fail('Job not found.');
         if (!booking_is_finished($row['status'])) fail('Only completed or cancelled jobs can be deleted.');
         [$n, $files] = delete_booking_record($jid);
@@ -144,7 +153,7 @@ $finished = (int)$conn->query("SELECT COUNT(*) c FROM bookings
           <?php endif; ?>
         <?php elseif ($b['status'] === 'in_progress'): ?>
           <?php if ((int)$b['client_started_ack'] === 1): ?>
-            <form method="post" style="display:inline" data-confirm="Mark booking #<?= (int)$b['id'] ?> as done? The customer will be asked to review the photos and confirm completion. For cash bookings, this does not record payment; the customer confirms cash separately." data-confirm-title="Mark job done"><?= csrf_field() ?><button class="btn btn-sm" name="finish" value="<?= $b['id'] ?>">Job Done</button></form>
+            <form method="post" style="display:inline" data-confirm="Mark booking #<?= (int)$b['id'] ?> as done? Before and after photos must be uploaded first. The customer will then review the photos and confirm completion. For cash bookings, this does not record payment; the customer confirms cash separately." data-confirm-title="Mark job done"><?= csrf_field() ?><button class="btn btn-sm" name="finish" value="<?= $b['id'] ?>">Job Done</button></form>
           <?php else: ?>
             <span class="payment-waiting-pill" title="Waiting for the client to confirm the job started">Waiting for client</span>
           <?php endif; ?>

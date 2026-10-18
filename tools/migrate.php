@@ -169,7 +169,7 @@ $tables = ['users', 'services', 'badges', 'bookings', 'checklist_items', 'bookin
     'feedback', 'notifications', 'contact_messages', 'audit_log', 'saved_addresses',
     'favorite_workers', 'worker_portfolio', 'login_attempts', 'password_resets',
     'worker_presence', 'chat_threads', 'chat_messages', 'app_sessions', 'media_files',
-    'role_id_counters', 'role_id_freed'];
+    'role_id_counters', 'role_id_freed', 'worker_finance_entries'];
 $missing = [];
 foreach ($tables as $t) {
     $r = $conn->query("SHOW TABLES LIKE '" . $conn->real_escape_string($t) . "'");
@@ -186,6 +186,7 @@ $cols = [
     'users'    => ['city', 'phone', 'address', 'worker_approved'],
     'bookings' => ['cancel_reason', 'address_lat', 'address_lng', 'payment_status', 'payment_method', 'client_started_ack', 'total_price'],
     'feedback' => ['rating', 'comment'],
+    'worker_finance_entries' => ['worker_id', 'booking_id', 'entry_type', 'amount', 'note', 'created_by'],
 ];
 $missingCols = [];
 foreach ($cols as $table => $names) {

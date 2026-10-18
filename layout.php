@@ -104,6 +104,8 @@ if ($u) {
   .userbox { margin-left:auto; display:flex; align-items:center; gap:12px; font-size:.9rem; }
   .userbox .who { color:var(--navy); white-space:nowrap; display:flex; align-items:center; gap:9px; text-decoration:none; font-weight:600; }
   .userbox .who:hover { color:var(--honey-dark); }
+  .userbox .who img.avatar.sm { display:block; }
+  .userbox .who .avatar.sm { width:36px!important; height:36px!important; min-width:36px!important; max-width:36px!important; flex:0 0 36px!important; aspect-ratio:1/1; object-fit:cover; border-radius:50%!important; }
   .userbox a { color:var(--navy); text-decoration:none; font-weight:500; transition:color var(--fast) var(--ease); }
   .userbox a:hover { color:var(--honey-dark); }
   .bell { position:relative; text-decoration:none; font-size:1.1rem; padding:7px 10px; border-radius:var(--radius-pill); display:inline-flex; transition:background var(--fast) var(--ease), transform var(--fast) var(--ease); }
@@ -255,7 +257,7 @@ if ($u) {
     background:#eef3fb; color:var(--navy);
     display:flex; align-items:center; justify-content:center; font-size:2rem; font-weight:800;
   }
-  .avatar.sm { width:34px; height:34px; font-size:.8rem; border-width:2px; box-shadow:0 0 0 1.5px rgba(224,170,51,.5); }
+  .avatar.sm { width:36px; height:36px; min-width:36px; max-width:36px; flex:0 0 36px; aspect-ratio:1/1; box-sizing:border-box; object-fit:cover; object-position:center; overflow:hidden; border-radius:50% !important; font-size:.8rem; border-width:2px; box-shadow:0 0 0 1.5px rgba(224,170,51,.5); }
   .profile-head { display:flex; align-items:center; gap:20px; flex-wrap:wrap; }
   .profile-meta { min-width:0; flex:1; }
   .profile-meta h1 { margin-bottom:4px; }
@@ -281,6 +283,19 @@ if ($u) {
   .welcome-hero > * { position:relative; z-index:1; }
   .welcome-hero h1 { font-size:1.7rem; margin-bottom:10px; }
   .welcome-hero p { opacity:.92; max-width:640px; }
+
+  /* Profile images are always circular and open an accessible zoom viewer. */
+  .profile-head .avatar, img.avatar.profile-zoom-trigger { width: clamp(76px, 10vw, 112px); height: clamp(76px, 10vw, 112px); min-width: clamp(76px, 10vw, 112px); border-radius: 50% !important; object-fit: cover; object-position: center; overflow: hidden; aspect-ratio: 1 / 1; cursor: zoom-in; }
+  .stat-link { display:flex; color:inherit; text-decoration:none; cursor:pointer; transition:transform .16s ease, box-shadow .16s ease; }
+  .stat-link:hover, .stat-link:focus-visible { transform:translateY(-2px); box-shadow:0 12px 28px rgba(20,48,77,.12); outline:2px solid rgba(32,131,76,.35); outline-offset:2px; }
+  .booking-worker-name { display:inline-block; max-width:100%; overflow-wrap:anywhere; font-weight:700; color:var(--ink,#183657); }
+  #profileImageViewer { position:fixed; inset:0; z-index:10000; display:none; align-items:center; justify-content:center; padding:24px; background:rgba(9,20,36,.88); backdrop-filter:blur(7px); }
+  #profileImageViewer.is-open { display:flex; }
+  #profileImageViewer .profile-viewer-panel { position:relative; max-width:min(92vw,900px); max-height:90vh; display:flex; flex-direction:column; align-items:center; gap:12px; }
+  #profileImageViewer img { display:block; max-width:82vw; max-height:72vh; width:auto; height:auto; object-fit:contain; border-radius:12px; transition:transform .15s ease; box-shadow:0 24px 70px rgba(0,0,0,.4); }
+  #profileImageViewer button { border:0; border-radius:999px; padding:9px 14px; background:#fff; color:#173451; font-weight:750; cursor:pointer; }
+  #profileImageViewer .profile-viewer-close { position:absolute; top:-12px; right:-12px; width:42px; height:42px; padding:0; font-size:1.5rem; box-shadow:0 4px 16px #0004; }
+  #profileImageViewer .profile-viewer-controls { display:flex; align-items:center; justify-content:center; gap:8px; flex-wrap:wrap; }
 
   /* ---------- Photo grid & lightbox ---------- */
   .photo-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:12px; }
@@ -414,7 +429,7 @@ if ($u) {
     nav.main.open { max-height:75vh; overflow:auto; opacity:1; visibility:visible; transform:none; }
     nav.main a { padding:12px 14px; font-size:.98rem; border-radius:var(--radius-sm); border:0; }
     .userbox .who { gap: 6px; min-width: 0; }
-    .userbox .who .avatar { width: 28px; height: 28px; flex-shrink: 0; }
+    .userbox .who .avatar { width: 32px!important; height: 32px!important; min-width:32px!important; max-width:32px!important; flex:0 0 32px!important; aspect-ratio:1/1; object-fit:cover; border-radius:50%!important; }
     .userbox .who span:not(.avatar),
     .userbox .who i { display: none; }
     .container { margin:18px auto; padding:0 14px; }
@@ -430,7 +445,6 @@ if ($u) {
     *,*::before,*::after { animation-duration:.001ms !important; animation-iteration-count:1 !important; transition-duration:.001ms !important; scroll-behavior:auto !important; }
   }
 </style>
-<?php if (!empty($enableMapAssets)): ?><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""><?php endif; ?>
 <link rel="stylesheet" href="<?= $base ?>/assets/css/chorehive-ui.css?v=<?= filemtime(__DIR__ . '/assets/css/chorehive-ui.css') ?>">
 </head>
 <body class="<?= ($u && $u['role']==='admin') ? 'adminpage' : '' ?>">
@@ -446,7 +460,7 @@ if ($u) {
       </div>
     </span>
     <a class="who" href="<?= $base ?>/admin/profile.php" title="My profile">
-      <?php if (avatar_url($u, $base)): ?><img class="avatar sm" src="<?= e(avatar_url($u, $base)) ?>" alt="">
+      <?php if (avatar_url($u, $base)): ?><img class="avatar sm profile-zoom-trigger" src="<?= e(avatar_url($u, $base)) ?>" alt="">
       <?php else: ?><span class="avatar sm"><?= e(initials($u['name'])) ?></span><?php endif; ?>
       <span><?= e($u['name']) ?></span>
     </a>
@@ -469,6 +483,7 @@ if ($u) {
   <a href="users.php"><i class="bi bi-people"></i> Users &amp; Badges</a>
   <a href="services.php"><i class="bi bi-tags"></i> Services</a>
   <a href="reports.php"><i class="bi bi-bar-chart"></i> Reports</a>
+  <a href="finance.php"><i class="bi bi-cash-stack"></i> Finance &amp; Payouts</a>
   <a href="audit.php"><i class="bi bi-clock-history"></i> Audit Log</a>
   <div class="sect">Site</div>
   <a href="<?= $base ?>/index.php"><i class="bi bi-house"></i> View Homepage</a>
@@ -498,14 +513,14 @@ if ($u) {
       <a href="<?= $base ?>/chat.php"><i class="bi bi-chat-dots"></i> Messages</a>
       <a href="<?= $base ?>/worker/reviews.php"><i class="bi bi-star"></i> My Reviews</a>
     <?php else: ?>
-      <a href="<?= $base ?>/admin/bookings.php">Bookings</a><a href="<?= $base ?>/admin/chats.php">Chats</a><a href="<?= $base ?>/admin/contact.php">Contact Messages</a><a href="<?= $base ?>/admin/users.php">Users</a><a href="<?= $base ?>/admin/services.php">Services</a><a href="<?= $base ?>/admin/reports.php">Reports</a><a href="<?= $base ?>/admin/audit.php">Audit Log</a>
+      <a href="<?= $base ?>/admin/bookings.php">Bookings</a><a href="<?= $base ?>/admin/chats.php">Chats</a><a href="<?= $base ?>/admin/contact.php">Contact Messages</a><a href="<?= $base ?>/admin/users.php">Users</a><a href="<?= $base ?>/admin/services.php">Services</a><a href="<?= $base ?>/admin/reports.php">Reports</a><a href="<?= $base ?>/admin/finance.php">Finance &amp; Payouts</a><a href="<?= $base ?>/admin/audit.php">Audit Log</a>
     <?php endif; ?>
   </nav>
   <div class="userbox">
     <?= $bell_html ?>
     <a class="who" href="<?= $base ?>/<?= $u['role'] === 'admin' ? 'admin' : $u['role'] ?>/profile.php" title="My profile">
       <?php if (avatar_url($u, $base)): ?>
-        <img class="avatar sm" src="<?= e(avatar_url($u, $base)) ?>" alt="">
+        <img class="avatar sm profile-zoom-trigger" src="<?= e(avatar_url($u, $base)) ?>" alt="">
       <?php else: ?>
         <span class="avatar sm"><?= e(initials($u['name'])) ?></span>
       <?php endif; ?>

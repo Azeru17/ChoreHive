@@ -9,6 +9,7 @@ if (!$usr) {
     exit;
 }
 $title = 'User Details - ' . $usr['name'];
+$usrAvatar = avatar_url($usr, ch_base());
 require '../layout.php';
 ?>
 <h1>User Details</h1>
@@ -23,9 +24,9 @@ require '../layout.php';
   <p><b>Bio:</b> <?= e($usr['bio'] ?? 'N/A') ?></p>
   <p><b>Worker Approved:</b> <?= $usr['role'] === 'worker' ? ($usr['worker_approved'] ? 'Yes' : 'No') : 'N/A' ?></p>
   <p><b>Member Since:</b> <?= date('M j, Y g:i A', strtotime($usr['created_at'])) ?></p>
-  <?php if (!empty($usr['avatar'])): ?>
-    <p><b>Profile Picture:</b><br><img src="../photo.php?id=<?= urlencode($usr['avatar']) ?>" alt="Profile" style="max-width: 150px; border-radius: 8px;"></p>
-  <?php endif; ?>
+  <?php if ($usrAvatar): ?>
+    <p><b>Profile Picture:</b><br><img src="<?= e($usrAvatar) ?>" alt="<?= e($usr['name']) ?> profile picture" style="width:120px;height:120px;object-fit:cover;border-radius:50%;border:3px solid var(--line);"></p>
+  <?php else: ?><p class="muted">No profile picture uploaded.</p><?php endif; ?>
 </div>
 <p class="actions"><a class="btn btn-sec" href="users.php">← Back to Users</a></p>
 <?php require '../footer.php'; ?>

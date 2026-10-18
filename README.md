@@ -58,7 +58,7 @@ All three roles can tidy up their own data. Deletions are **permanent**, confirm
 | Audit log | — | — | "Clear audit log" |
 | Client reviews | — | "My Reviews" page — delete one or all | — |
 
-**Guards:** active jobs (`pending`, `assigned`, `in_progress`, `awaiting_verification`) cannot be deleted by clients or workers — cancel them first. The checklist freezes once a job reaches `awaiting_verification`, so tasks cannot be removed after verification. Only admins may delete an active booking.
+**Guards:** active jobs (`pending`, `assigned`, `in_progress`, `awaiting_verification`) cannot be deleted by clients or workers — cancel them first. The checklist freezes once a job reaches `awaiting_verification`, `completed`, or `cancelled`, so tasks cannot be changed after verification or cancellation. Workers must upload at least one before photo and one after photo before marking a job done. Only admins may delete an active booking.
 
 ## Profiles
 
@@ -97,8 +97,11 @@ Back up both the project files and database first. Do **not** import `db.sql` in
 6. `migration_demo_payments_notifications.sql`
 7. `migration_contact_messages.sql`
 8. `migration_user_city.sql`
+9. `migration_role_id_allocation.sql`
+10. `migration_finance_and_worker_location.sql`
+11. `migration_vercel_storage.sql` (only when deploying with database-backed sessions and image storage, or when those tables are missing)
 
-The fifth migration adds cancellation reasons, client start acknowledgements, announcement titles, saved addresses, favorite workers, and worker portfolios. The sixth migration adds the demo-only payment status and actionable-notification URL. The seventh migration creates the inbox table used by the public contact form and administrator inbox. The eighth migration adds the structured City / Municipality used for location-aware cleaner matching. These migrations preserve existing data; verify the database backup and schema before running them on production. The chat-message deletion migration adds a soft-delete marker; it does not run automatically.
+The fifth migration adds cancellation reasons, client start acknowledgements, announcement titles, saved addresses, favorite workers, and worker portfolios. The sixth adds demo-only payment status and actionable notification URLs. The seventh creates the public contact-form inbox. The eighth adds the structured City / Municipality field. The ninth creates registration ID-allocation tables. The tenth adds the worker finance ledger and standardizes worker municipality to Polomolok while preserving each street address. The eleventh creates database-backed sessions and image storage for serverless deployments. These migrations preserve existing data; verify the database backup and schema before running them on production. The chat-message deletion migration adds a soft-delete marker; it does not run automatically.
 
 ### Local wallet-payment simulation
 
@@ -178,7 +181,7 @@ Use `APP_URL` for the public site origin when configuring email or PayMongo retu
 
 Customer dashboards prioritize worker discovery. Customers can browse cleaner profiles, compare ratings/reviews and availability, message a worker before committing, and select **Hire this cleaner** from the profile or chat sidebar. Hiring opens a guided job-details form with the selected worker locked in, the saved address prefilled, optional map pin, service-price summary, editable checklist, and payment method.
 
-Cash is confirmed only after the worker marks the job complete and the customer has reviewed the work and physically paid the worker. GCash/Maya checkout happens before work starts through PayMongo; the server prevents workers from starting an online booking while it remains unpaid. A receipt with the PayMongo/ChoreHive reference can be printed or saved to PNG. Interactive map pins use Leaflet and OpenStreetMap tiles; the customer must type the full address manually because the map never overwrites the address text. A pin is optional, and workers/admins can open it in a map or directions app.
+Cash is confirmed only after the worker marks the job complete and the customer has reviewed the work and physically paid the worker. GCash/Maya checkout happens before work starts through PayMongo; the server prevents workers from starting an online booking while it remains unpaid. A receipt with the PayMongo/ChoreHive reference can be printed or saved to PNG. The booking location uses a Google Maps iframe preview without an API key. The customer must type the full address manually; the map preview follows the address, and the “Use my location” button can save device coordinates after permission. The iframe itself cannot return clicked-pin coordinates. Workers/admins open saved coordinates in Google Maps.
 
 The chat UI refreshes messages by polling every three seconds (near-real-time polling, not WebSockets). Worker presence is updated from authenticated worker pages and chat activity. Clients and workers can delete their own sent messages; administrators can remove a message from the audited conversation-review screen. Deleted content is replaced with a “Message deleted” marker for participants and administrators, and deletion actions are audited. The database needs `migration_chat_message_delete.sql` before this feature can be used.
 
@@ -188,4 +191,4 @@ If you already imported `db.sql` before these features, back up your database an
 
 ### Chat behavior
 
-The chat interface polls the server every three seconds for new messages; this is near-real-time polling, not a persistent WebSocket connection. Worker presence is marked as recently active when the worker's authenticated pages or chat endpoint update their heartbeat. For the map, the project uses Leaflet and OpenStreetMap tiles without an API key. Keep required OpenStreetMap attribution visible and follow the tile usage policy. The typed address remains the source of truth (no reverse geocoding). On Hostinger, enable HTTPS, backups, and PayMongo live keys only after KYC.
+The chat interface polls the server every three seconds for new messages; this is near-real-time polling, not a persistent WebSocket connection. Worker presence is marked as recently active when the worker's authenticated pages or chat endpoint update their heartbeat. For the map, the project uses a no-key Google Maps iframe preview rather than the Google Maps JavaScript API. The preview follows the typed address; device coordinates can be saved using browser geolocation. The iframe cannot report clicks or dragged pins back to ChoreHive. Saved coordinates open Google Maps. On Hostinger, enable HTTPS, backups, and PayMongo live keys only after KYC.

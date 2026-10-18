@@ -130,3 +130,8 @@ In this captured state, the totals and returning-customer metrics are zero, whil
 - Repeat-customer reports identify customers with multiple completed bookings but do not predict a recurring schedule.
 - Financial report values describe recorded paid booking totals and should not be represented as platform revenue or worker payouts.
 - Operational reports are only as reliable as the underlying booking, payment, and rating records.
+
+
+## Photo verification and checklist integrity
+
+Workers must attach at least one before photo and one after photo before moving an active job to awaiting client verification. Before photos can be added while a job is assigned or in progress; after photos can be added while in progress or awaiting verification. Checklist edits are allowed only while a booking is pending, assigned, or in progress. Verification, completion, and cancellation lock the checklist.

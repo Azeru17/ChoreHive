@@ -1,22 +1,15 @@
 <?php
 /**
- * Copy this file to tidb.local.php and fill in the 5 values from your
- * TiDB Cloud "Connect" dialog, then run:  php tools/setup_database.php
- *
- * tidb.local.php is gitignored - it holds your database password.
+ * Example TiDB Cloud connection settings for tools/setup_database.php.
+ * Copy to tidb.local.php and replace the placeholders. Never commit live credentials.
  */
-
 return [
-    'host' => 'gateway-xxxx.ap-southeast-1.prod.aws.tidbcloud.com',
+    'host' => 'your-cluster-host.example.com',
     'port' => 4000,
-    'user' => 'your_tidb_username',
-    'pass' => 'your_tidb_password',
+    'user' => 'your_tidb_user',
+    'pass' => 'replace_with_your_password',
     'db'   => 'chorehive',
-
-    // Usually leave this out. Only add it if setup says the certificate/TLS
-    // check failed: download https://crt.sh/?d=9314791 into certs/isrg-root-x1.pem
-    // 'ca' => __DIR__ . '/certs/isrg-root-x1.pem',
-
-    // Leave this out for TiDB Cloud, which always needs TLS.
-    // 'ssl' => false,
+    'ssl'  => true,
+    // Optional absolute path to a CA bundle if PHP cannot use the system trust store.
+    'ca'   => '',
 ];

@@ -1,0 +1,27 @@
+ChoreHive Location Update — October 18, 2026
+
+What changed
+- The booking map now opens centered on Polomolok, South Cotabato by default.
+- Customers can click the map, drag the marker, or use their browser's current location (requires permission and HTTPS, except localhost development).
+- A selected pin now shows an "Open in Google Maps" link for navigation without a Google Maps Platform API key.
+- Admin booking details, worker job details, client booking details, and saved-address pages open pinned coordinates in Google Maps.
+- Loading a saved address with no coordinates clears any previously selected map pin so stale coordinates are not accidentally saved.
+- The written address remains required and is never overwritten by map actions.
+
+No paid Google Maps API is enabled. The embedded map uses Leaflet and OpenStreetMap tiles. Keep the visible OpenStreetMap attribution and follow its tile usage policy. This implementation deliberately does not send a customer's private typed address to a geocoding API.
+
+Testing performed
+- PHP syntax check passed for 56 PHP files.
+- JavaScript syntax check passed for the standalone scripts extracted from client/book.php.
+- The application was not run against a live MySQL database or a real browser in this environment, so please test the map in your local XAMPP setup before your defense.
+
+Quick local test
+1. Start Apache and MySQL in XAMPP and open ChoreHive through localhost (not by double-clicking the PHP file).
+2. Sign in as a client and open a worker profile -> Hire this cleaner.
+3. Confirm the map opens around Polomolok. Click somewhere on the map; confirm coordinates appear and the Google Maps link becomes visible.
+4. Drag the marker and confirm the displayed coordinates change.
+5. Try Use my location and allow the browser permission, if available.
+6. Type the complete address manually and submit a test booking. Confirm the worker's job page and admin booking page show the same pin in Google Maps.
+7. Test a saved address with a pin, then one without a pin, to confirm the old pin is cleared.
+
+Important: if the map tiles do not load, the typed address still works. Browser geolocation generally requires HTTPS or localhost. Internet access is required for map tiles and for opening Google Maps.

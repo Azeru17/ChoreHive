@@ -5,30 +5,60 @@ $u = require_role('client');
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['rebook'])) {
     verify_csrf();
     $id = v_int('rebook', 1, PHP_INT_MAX, 'Booking');
-    $b = $conn->query("SELECT * FROM bookings WHERE id=$id AND client_id={$u['id']}")->fetch_assoc();
-    if (!$b) die('Booking not found.');
-    $stmt = $conn->prepare("INSERT INTO bookings (client_id,worker_id,service_id,schedule,address,notes,total_price,payment_method,address_lat,address_lng)
-                            VALUES (?,?,?,?,?,?,?,?,?,?)");
-    $new_sched = date('Y-m-d H:i:s', strtotime('+7 days', max(strtotime($b['schedule']), time())));
+    $sourceStmt = $conn->prepare('SELECT * FROM bookings WHERE id=? AND client_id=?');
+    $sourceStmt->bind_param('ii', $id, $u['id']);
+    $sourceStmt->execute();
+    $b = $sourceStmt->get_result()->fetch_assoc();
+    if (!$b) fail('Booking not found.');
+    if (!booking_is_finished($b['status'])) fail('You can only rebook a completed or cancelled booking.');
+
+    $workerId = $b['worker_id'] === null ? null : (int)$b['worker_id'];
+    if ($workerId !== null) {
+        $workerStmt = $conn->prepare("SELECT id FROM users WHERE id=? AND role='worker' AND worker_approved=1");
+        $workerStmt->bind_param('i', $workerId);
+        $workerStmt->execute();
+        if (!$workerStmt->get_result()->fetch_assoc()) {
+            fail('Your previous cleaner is no longer available for new bookings. Please choose another cleaner from Find a Cleaner.');
+        }
+        $busyStmt = $conn->prepare("SELECT COUNT(*) AS total FROM bookings WHERE worker_id=? AND status IN ('pending','assigned','in_progress','awaiting_verification')");
+        $busyStmt->bind_param('i', $workerId);
+        $busyStmt->execute();
+        if ((int)$busyStmt->get_result()->fetch_assoc()['total'] > 0) {
+            fail('Your previous cleaner has another active booking. Please choose another cleaner or try again later.');
+        }
+    }
+
+    $newSched = date('Y-m-d H:i:s', strtotime('+7 days', max(strtotime($b['schedule']), time())));
     $lat = $b['address_lat'] === null ? null : (string)$b['address_lat'];
     $lng = $b['address_lng'] === null ? null : (string)$b['address_lng'];
     $method = in_array($b['payment_method'], ['cash','gcash','maya'], true) ? $b['payment_method'] : 'cash';
-    $stmt->bind_param('iiisssdsss', $b['client_id'], $b['worker_id'], $b['service_id'],
-                      $new_sched, $b['address'], $b['notes'], $b['total_price'], $method, $lat, $lng);
-    $stmt->execute();
-    $new_id = $conn->insert_id;
-    $stmt2 = $conn->prepare("INSERT INTO checklist_items (booking_id,task) SELECT ?, task FROM checklist_items WHERE booking_id=?");
-    $stmt2->bind_param('ii', $new_id, $id);
-    $stmt2->execute();
-    if ($b['worker_id'] && $method === 'cash') {
-        notify_and_email($b['worker_id'], "{$u['name']} rebooked you for booking #$new_id on " . date('M j, g:i A', strtotime($new_sched)) . '.', 'Rebooked by client', 'worker/job.php?id=' . $new_id);
-    } elseif ($b['worker_id']) {
-        notify_and_email($b['worker_id'], "Rebooking #$new_id is reserved but waiting for the customer's GCash/Maya payment.", 'Rebooking awaiting payment', 'worker/job.php?id=' . $new_id);
+
+    $conn->begin_transaction();
+    try {
+        $stmt = $conn->prepare("INSERT INTO bookings (client_id,worker_id,service_id,schedule,address,notes,total_price,payment_method,address_lat,address_lng,status) VALUES (?,?,?,?,?,?,?,?,?,?,?)");
+        $status = $workerId === null ? 'pending' : 'assigned';
+        $stmt->bind_param('iiisssdssss', $b['client_id'], $workerId, $b['service_id'], $newSched, $b['address'], $b['notes'], $b['total_price'], $method, $lat, $lng, $status);
+        $stmt->execute();
+        $newId = (int)$conn->insert_id;
+        $stmt2 = $conn->prepare('INSERT INTO checklist_items (booking_id,task) SELECT ?, task FROM checklist_items WHERE booking_id=?');
+        $stmt2->bind_param('ii', $newId, $id);
+        $stmt2->execute();
+        $conn->commit();
+    } catch (Throwable $ex) {
+        $conn->rollback();
+        error_log('ChoreHive rebooking failed: ' . $ex->getMessage());
+        fail('We could not create your rebooking. Please refresh and try again.');
     }
-    notify_and_email($u['id'], "Rebooked as #$new_id on " . date('M j, g:i A', strtotime($new_sched)) . ". Same worker, checklist, map pin and payment preference carried over.", 'Rebook confirmed', 'client/booking.php?id=' . $new_id);
-    audit_log('booking_rebooked', "Client {$u['name']} rebooked #$id as #$new_id (payment method $method)");
+
+    if ($workerId && $method === 'cash') {
+        notify_and_email($workerId, "{$u['name']} rebooked you for booking #$newId on " . date('M j, g:i A', strtotime($newSched)) . '.', 'Rebooked by client', 'worker/job.php?id=' . $newId);
+    } elseif ($workerId) {
+        notify_and_email($workerId, "Rebooking #$newId is reserved but waiting for the customer's GCash/Maya payment.", 'Rebooking awaiting payment', 'worker/job.php?id=' . $newId);
+    }
+    notify_and_email($u['id'], "Rebooked as #$newId on " . date('M j, g:i A', strtotime($newSched)) . ". Same worker, checklist, map pin and payment preference carried over.", 'Rebook confirmed', 'client/booking.php?id=' . $newId);
+    audit_log('booking_rebooked', "Client {$u['name']} rebooked #$id as #$newId (payment method $method)");
     flash($method === 'cash' ? 'Rebooked! Cash will be due after the job.' : 'Rebooked. Complete GCash or Maya checkout before the worker starts.');
-    header('Location: ' . ($method === 'cash' ? 'booking.php?id=' . $new_id : 'pay.php?id=' . $new_id)); exit;
+    header('Location: ' . ($method === 'cash' ? 'booking.php?id=' . $newId : 'pay.php?id=' . $newId)); exit;
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_booking'])) {
@@ -71,7 +101,10 @@ while ($r = $res2->fetch_assoc()) {
     $bookings_by_day[$day][] = $r;
 }
 $today = new DateTime('first day of this month');
-$month = isset($_GET['m']) ? DateTime::createFromFormat('Y-m', $_GET['m']) : $today;
+$monthParam = isset($_GET['m']) && is_string($_GET['m']) ? $_GET['m'] : '';
+$month = preg_match('/\A\d{4}-(?:0[1-9]|1[0-2])\z/', $monthParam)
+    ? DateTime::createFromFormat('!Y-m', $monthParam)
+    : false;
 if (!$month) $month = $today;
 $month_start = (clone $month)->modify('first day of this month');
 $month_end   = (clone $month)->modify('last day of this month');
@@ -126,7 +159,7 @@ $next = (clone $month)->modify('+1 month')->format('Y-m');
         <?php if (in_array($b['status'], ['pending','assigned','in_progress','awaiting_verification'], true)): ?>
           <a class="btn btn-sm btn-sec" href="booking.php?id=<?= $b['id'] ?>">Cancel</a>
         <?php endif; ?>
-        <form class="booking-action-form" method="post"><?= csrf_field() ?><button class="btn btn-sm" name="rebook" value="<?= $b['id'] ?>">Rebook</button></form>
+        <?php if (booking_is_finished($b['status'])): ?><form class="booking-action-form" method="post" action="bookings.php"><?= csrf_field() ?><button class="btn btn-sm" name="rebook" value="<?= (int)$b['id'] ?>">Rebook</button></form><?php endif; ?>
         <?php if (booking_is_finished($b['status'])): ?>
           <form class="booking-action-form" method="post" data-confirm="Permanently delete booking #<?= (int)$b['id'] ?>? Its checklist, photos and feedback will also be deleted. This cannot be undone.<?= in_array($b['payment_status'], ['paid','demo_paid'], true) ? ' Deleting the booking does not refund its payment.' : '' ?>" data-confirm-title="Delete booking" data-confirm-yes="Yes, delete"><?= csrf_field() ?><button class="icon-btn danger" name="delete_booking" value="<?= $b['id'] ?>" title="Delete booking" aria-label="Delete booking">🗑</button></form>
         <?php endif; ?>

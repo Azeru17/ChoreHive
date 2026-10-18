@@ -92,26 +92,26 @@ require '../layout.php';
 
 <!-- Stat cards -->
 <div class="dash-stats">
-  <div class="stat dark">
+  <a href="bookings.php" class="stat dark stat-link" aria-label="View all bookings">
     <div class="top"><i class="bi bi-calendar3"></i><b><?= (int)$s['total'] ?></b></div>
     <h4>Total bookings</h4>
-  </div>
-  <div class="stat honey">
+  </a>
+  <a href="bookings.php?status=pending" class="stat honey stat-link" aria-label="View pending assignments">
     <div class="top"><i class="bi bi-hourglass-split"></i><b><?= (int)$s['pending'] ?></b></div>
     <h4>Pending assignment</h4>
-  </div>
-  <div class="stat info">
+  </a>
+  <a href="users.php" class="stat info stat-link" aria-label="View users and worker badges">
     <div class="top"><i class="bi bi-arrow-repeat"></i><b><?= (int)$s['active'] ?></b></div>
     <h4>Active jobs</h4>
-  </div>
-  <div class="stat ok">
+  </a>
+  <a href="reports.php" class="stat ok stat-link" aria-label="View reports">
     <div class="top"><i class="bi bi-cash-coin"></i><b>&#8369;<?= number_format($s['revenue'], 0) ?></b></div>
     <h4>Paid booking value (excludes simulations)</h4>
-  </div>
-  <div class="stat">
+  </a>
+  <a href="users.php" class="stat stat-link" aria-label="View clients, workers and badges">
     <div class="top"><i class="bi bi-people"></i><b><?= $counts['client'] + $counts['worker'] + $counts['admin'] ?></b></div>
     <h4><?= $counts['client'] ?> clients &middot; <?= $counts['worker'] ?> workers</h4>
-  </div>
+  </a>
 </div>
 
 <!-- Marketplace overview: customer discovery, chat activity, worker availability and bookings -->
@@ -201,6 +201,7 @@ require '../layout.php';
     <a class="btn btn-sec" href="users.php"><i class="bi bi-people"></i> Users &amp; badges</a>
     <a class="btn btn-sec" href="services.php"><i class="bi bi-tags"></i> Services</a>
     <a class="btn btn-sec" href="reports.php"><i class="bi bi-bar-chart"></i> Reports</a>
+    <a class="btn btn-sec" href="finance.php"><i class="bi bi-cash-stack"></i> Finance &amp; payouts</a>
     <a class="btn btn-sec" href="audit.php"><i class="bi bi-clock-history"></i> Audit log</a>
   </div>
 </div>

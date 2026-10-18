@@ -8,12 +8,20 @@ $b = $conn->query("SELECT b.*,
   FROM bookings b
   JOIN services s ON s.id=b.service_id 
   JOIN users u2 ON u2.id=b.client_id
-  WHERE b.id=$id AND b.worker_id={$u['id']}")->fetch_assoc();
-if (!$b) { die('Job not found.'); }
+  WHERE b.id=" . (int)$id . " AND b.worker_id=" . (int)$u['id'])->fetch_assoc();
+if (!$b) {
+    http_response_code(404);
+    $title = 'Job not found';
+    require '../layout.php';
+    echo '<div class="card"><h1>Job not found</h1><p class="muted">This job is no longer assigned to your account, or it may have been removed.</p><a class="btn btn-sec" href="jobs.php">Back to My Jobs</a></div>';
+    require '../footer.php';
+    exit;
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     verify_csrf();
     if (isset($_POST['toggle'])) {
+        if (!checklist_is_editable($b['status'])) fail('This checklist is locked because the job is being verified, completed, or cancelled.');
         $cid = v_int('toggle', 1, PHP_INT_MAX, 'Checklist item');
         $stmt = $conn->prepare("UPDATE checklist_items SET done = 1 - done WHERE id=? AND booking_id=?");
         $stmt->bind_param('ii', $cid, $id);
@@ -22,7 +30,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     $stage = $_POST['stage'] ?? '';
     if (in_array($stage, ['before','after'], true)) {
-        handle_photo_upload('photo', $id, $stage, $conn);
+        $allowedStatuses = $stage === 'before' ? ['assigned','in_progress'] : ['in_progress','awaiting_verification'];
+        if (!in_array($b['status'], $allowedStatuses, true)) {
+            fail($stage === 'before'
+                ? 'Before photos can only be added before or during an active job.'
+                : 'After photos can only be added while the job is in progress or awaiting client verification.');
+        }
+        if (!handle_photo_upload('photo', $id, $stage, $conn)) fail('Choose a photo to upload.');
         notify_and_email($b['client_id'], "{$u['name']} uploaded new $stage photo(s) for your booking #$id ({$b['service']}). Tap to view.", 'New job photos', 'client/booking.php?id=' . $id);
         flash('Photo uploaded.');
         header('Location: job.php?id=' . $id); exit;
@@ -40,9 +54,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 $title = 'Job #' . $id;
 require '../layout.php';
-$items = $conn->query("SELECT * FROM checklist_items WHERE booking_id=$id");
-$before = $conn->query("SELECT * FROM booking_photos WHERE booking_id=$id AND stage='before'");
-$after  = $conn->query("SELECT * FROM booking_photos WHERE booking_id=$id AND stage='after'");
+$items = $conn->query("SELECT * FROM checklist_items WHERE booking_id=" . (int)$id);
+$before = $conn->query("SELECT * FROM booking_photos WHERE booking_id=" . (int)$id . " AND stage='before'");
+$after  = $conn->query("SELECT * FROM booking_photos WHERE booking_id=" . (int)$id . " AND stage='after'");
 $client_avatar_url = avatar_url(['avatar' => $b['client_avatar']], ch_base());
 ?>
 <h1>Job #<?= $id ?> — <?= e($b['service']) ?></h1>
@@ -90,7 +104,7 @@ $client_avatar_url = avatar_url(['avatar' => $b['client_avatar']], ch_base());
   <?php if ($b['address_lat'] !== null && $b['address_lng'] !== null): ?>
     <p class="job-map-actions" style="margin-top: 10px;">
       <b>Customer's Map Pin:</b> 
-      <a class="btn btn-sm" target="_blank" rel="noopener" href="https://www.openstreetmap.org/?mlat=<?= e((string)$b['address_lat']) ?>&amp;mlon=<?= e((string)$b['address_lng']) ?>#map=17/<?= e((string)$b['address_lat']) ?>/<?= e((string)$b['address_lng']) ?>">🗺 Open pinned map</a>
+      <a class="btn btn-sm" target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&amp;query=<?= rawurlencode((string)$b['address_lat'] . ',' . (string)$b['address_lng']) ?>">🗺 Open pinned map</a>
       <a class="btn btn-sm btn-sec" target="_blank" rel="noopener" href="https://www.google.com/maps/dir/?api=1&amp;destination=<?= rawurlencode((string)$b['address_lat'] . ',' . (string)$b['address_lng']) ?>">🧭 Get directions</a>
     </p>
     <p class="muted" style="font-size: 0.85rem; margin-top: 4px;">Coordinates: <?= e((string)$b['address_lat']) ?>, <?= e((string)$b['address_lng']) ?></p>
@@ -101,9 +115,12 @@ $client_avatar_url = avatar_url(['avatar' => $b['client_avatar']], ch_base());
 
 <div class="card">
   <h2>Payment &amp; Online Transaction Receipt</h2>
-  <p><b>Payment Method:</b> <?= e(ucfirst($b['payment_method'])) ?></p>
+  <p><b>Payment Method:</b> <?= e(['cash'=>'Cash','gcash'=>'GCash (PayMongo)','maya'=>'Maya (PayMongo)'][$b['payment_method']] ?? ucfirst($b['payment_method'])) ?></p>
   <p><b>Payment Status:</b> <span class="badge <?= $b['payment_status'] === 'paid' ? 'status-completed' : ($b['payment_status'] === 'demo_paid' ? 'status-in_progress' : 'status-pending') ?>"><?= e($b['payment_status'] === 'demo_paid' ? 'Demo Paid (Simulation)' : ucfirst($b['payment_status'])) ?></span></p>
   <p><b>Total Amount:</b> ₱<?= number_format((float)$b['total_price'], 2) ?></p>
+  <?php if (in_array($b['payment_status'], ['paid','demo_paid'], true) && !empty($b['payment_reference'])): ?>
+    <p class="actions" style="margin-top:12px;"><a class="btn btn-sm" href="receipt.php?id=<?= (int)$id ?>">🧾 View / print payment receipt</a></p>
+  <?php endif; ?>
 
   <?php if (in_array($b['payment_status'], ['paid', 'demo_paid'], true) || !empty($b['payment_reference'])): ?>
     <div style="background: #f0f7ff; border: 1px solid #cce3ff; padding: 14px 18px; border-radius: 8px; margin-top: 14px;">
@@ -123,42 +140,52 @@ $client_avatar_url = avatar_url(['avatar' => $b['client_avatar']], ch_base());
 
 <div class="card">
   <h2>Checklist — tick off as you go</h2>
-  <?php while ($it = $items->fetch_assoc()): ?>
-    <form method="post" style="margin:4px 0;">
-      <?= csrf_field() ?>
-      <button name="toggle" value="<?= $it['id'] ?>" class="btn btn-sm <?= $it['done'] ? '' : 'btn-sec' ?>">
-        <?= $it['done'] ? '✅' : '⬜' ?> <?= e($it['task']) ?>
-      </button>
-    </form>
+  <?php $checklistEditable = checklist_is_editable($b['status']); while ($it = $items->fetch_assoc()): ?>
+    <?php if ($checklistEditable): ?>
+      <form method="post" style="margin:4px 0;">
+        <?= csrf_field() ?>
+        <button name="toggle" value="<?= (int)$it['id'] ?>" class="btn btn-sm <?= $it['done'] ? '' : 'btn-sec' ?>">
+          <?= $it['done'] ? '✅' : '⬜' ?> <?= e($it['task']) ?>
+        </button>
+      </form>
+    <?php else: ?>
+      <p style="margin:6px 0;"><?= $it['done'] ? '✅' : '⬜' ?> <?= e($it['task']) ?></p>
+    <?php endif; ?>
   <?php endwhile; ?>
+  <?php if (!$checklistEditable): ?><p class="muted">This checklist is locked because the job is being verified, completed, or cancelled.</p><?php endif; ?>
 </div>
 
 <div class="card">
-  <h2>Photos <span class="muted" style="font-weight:400">(click to enlarge)</span></h2>
+  <h2>Before &amp; After Photos <span class="muted" style="font-weight:400">(click to enlarge)</span></h2>
+  <p class="muted">Upload at least one before photo and one after photo before marking the job done. Photos are stored with this booking so the client can review the result.</p>
   <p><b>Before:</b></p>
   <div class="photo-grid">
     <?php while ($p = $before->fetch_assoc()): ?>
       <figure><img class="lightbox-img" src="../photo.php?id=<?= (int)$p['id'] ?>" alt="Before photo" loading="lazy" tabindex="0" role="button" aria-label="Enlarge before photo"><figcaption>before</figcaption></figure>
     <?php endwhile; ?>
   </div>
-  <form method="post" enctype="multipart/form-data" class="worker-photo-upload">
-    <?= csrf_field() ?>
-    <input type="hidden" name="stage" value="before">
-    <div class="worker-photo-file"><label>Upload before photo (JPG/PNG/WebP, max 3&nbsp;MB)</label><input type="file" name="photo" accept="image/jpeg,image/png,image/webp" required></div>
-    <button class="btn btn-sm">Upload</button>
-  </form>
+  <?php if (in_array($b['status'], ['assigned','in_progress'], true)): ?>
+    <form method="post" enctype="multipart/form-data" class="worker-photo-upload">
+      <?= csrf_field() ?>
+      <input type="hidden" name="stage" value="before">
+      <div class="worker-photo-file"><label>Upload before photo (JPG/PNG/WebP, max 3&nbsp;MB)</label><input type="file" name="photo" accept="image/jpeg,image/png,image/webp" required></div>
+      <button class="btn btn-sm">Upload</button>
+    </form>
+  <?php else: ?><p class="muted">Before-photo uploads are closed for this job.</p><?php endif; ?>
   <p style="margin-top:12px;"><b>After:</b></p>
   <div class="photo-grid">
     <?php while ($p = $after->fetch_assoc()): ?>
       <figure><img class="lightbox-img" src="../photo.php?id=<?= (int)$p['id'] ?>" alt="After photo" loading="lazy" tabindex="0" role="button" aria-label="Enlarge after photo"><figcaption>after</figcaption></figure>
     <?php endwhile; ?>
   </div>
-  <form method="post" enctype="multipart/form-data" class="worker-photo-upload">
-    <?= csrf_field() ?>
-    <input type="hidden" name="stage" value="after">
-    <div class="worker-photo-file"><label>Upload after photo (JPG/PNG/WebP, max 3&nbsp;MB)</label><input type="file" name="photo" accept="image/jpeg,image/png,image/webp" required></div>
-    <button class="btn btn-sm">Upload</button>
-  </form>
+  <?php if (in_array($b['status'], ['in_progress','awaiting_verification'], true)): ?>
+    <form method="post" enctype="multipart/form-data" class="worker-photo-upload">
+      <?= csrf_field() ?>
+      <input type="hidden" name="stage" value="after">
+      <div class="worker-photo-file"><label>Upload after photo (JPG/PNG/WebP, max 3&nbsp;MB)</label><input type="file" name="photo" accept="image/jpeg,image/png,image/webp" required></div>
+      <button class="btn btn-sm">Upload</button>
+    </form>
+  <?php else: ?><p class="muted">After-photo uploads are available once the job has started.</p><?php endif; ?>
 </div>
 <p class="actions"><a class="btn btn-sec" href="jobs.php">← Back to jobs</a></p>
 <?php if (booking_is_finished($b['status'])): ?>

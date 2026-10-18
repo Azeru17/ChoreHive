@@ -15,7 +15,7 @@ CREATE TABLE users (
   worker_approved TINYINT(1) NOT NULL DEFAULT 0,
   phone VARCHAR(30),
   address VARCHAR(255),
-  city VARCHAR(100),
+  city VARCHAR(100) NULL,
   bio TEXT,
   avatar VARCHAR(255) NULL,
   is_new TINYINT(1) DEFAULT 1,
@@ -178,6 +178,36 @@ CREATE TABLE worker_presence (
   FOREIGN KEY (worker_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
+
+
+CREATE TABLE IF NOT EXISTS role_id_counters (
+  role ENUM('client','worker','admin') NOT NULL PRIMARY KEY,
+  next_id INT NOT NULL DEFAULT 1
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS role_id_freed (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  role ENUM('client','worker','admin') NOT NULL,
+  freed_id INT NOT NULL,
+  UNIQUE KEY unique_freed (role, freed_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS worker_finance_entries (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  worker_id INT NULL,
+  booking_id INT NULL,
+  entry_type ENUM('payout','bonus','deduction','discount','expense') NOT NULL,
+  amount DECIMAL(10,2) NOT NULL,
+  note VARCHAR(255) NOT NULL,
+  created_by INT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_finance_worker_date (worker_id, created_at),
+  INDEX idx_finance_type_date (entry_type, created_at),
+  CONSTRAINT fk_finance_worker FOREIGN KEY (worker_id) REFERENCES users(id) ON DELETE CASCADE,
+  CONSTRAINT fk_finance_booking FOREIGN KEY (booking_id) REFERENCES bookings(id) ON DELETE SET NULL,
+  CONSTRAINT fk_finance_admin FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE chat_threads (
   id INT AUTO_INCREMENT PRIMARY KEY,
   client_id INT NOT NULL,
@@ -221,31 +251,3 @@ INSERT INTO services (name,description,base_price,duration_hours) VALUES
 ('Deep Cleaning','Thorough cleaning of kitchens, bathrooms, and hard-to-reach areas.',700,4),
 ('Move-in/Move-out Cleaning','Full unit cleaning for tenants and landlords.',900,5),
 ('Laundry & Ironing','Washing, drying, folding, and ironing.',300,3);
-
--- Per-role ID allocation. users.id is a shared AUTO_INCREMENT, but the app hands
--- out role-scoped IDs (see get_next_role_id() in config.php) so that client,
--- worker and admin IDs read predictably. Both tables are REQUIRED: registration
--- reads them on every new signup.
-CREATE TABLE IF NOT EXISTS role_id_counters (
-  role ENUM('client','worker','admin') NOT NULL PRIMARY KEY,
-  next_id INT UNSIGNED NOT NULL DEFAULT 1
-);
-
-CREATE TABLE IF NOT EXISTS role_id_freed (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  role ENUM('client','worker','admin') NOT NULL,
-  freed_id INT UNSIGNED NOT NULL,
-  UNIQUE KEY uq_role_id_freed (role, freed_id)
-);
-
--- Start each counter above the highest ID already used for that role, so the
--- first registration cannot collide with a pre-seeded account.
-INSERT INTO role_id_counters (role, next_id)
-SELECT 'client', COALESCE(MAX(id), 0) + 1 FROM users WHERE role = 'client'
-ON DUPLICATE KEY UPDATE next_id = GREATEST(next_id, VALUES(next_id));
-INSERT INTO role_id_counters (role, next_id)
-SELECT 'worker', COALESCE(MAX(id), 0) + 1 FROM users WHERE role = 'worker'
-ON DUPLICATE KEY UPDATE next_id = GREATEST(next_id, VALUES(next_id));
-INSERT INTO role_id_counters (role, next_id)
-SELECT 'admin', COALESCE(MAX(id), 0) + 1 FROM users WHERE role = 'admin'
-ON DUPLICATE KEY UPDATE next_id = GREATEST(next_id, VALUES(next_id));

@@ -2,13 +2,42 @@
 require '../config.php';
 $u = require_role('worker');
 
+/* Self-service account deletion: preserve transaction history while anonymizing personal details. */
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_my_account'])) {
+    verify_csrf();
+    $pw = (string)($_POST['delete_password'] ?? '');
+    $roleForDelete = 'worker';
+    $check = $conn->prepare("SELECT password, avatar FROM users WHERE id=? AND role=?");
+    $check->bind_param('is', $u['id'], $roleForDelete);
+    $check->execute();
+    $account = $check->get_result()->fetch_assoc();
+    if (!$account || !password_verify($pw, $account['password'])) fail('Password did not match. Your account was not deleted.');
+    if (!empty($account['avatar'])) media_delete($account['avatar']);
+    $newName = 'Deleted account #' . (int)$u['id'];
+    $newEmail = 'deleted-worker-' . (int)$u['id'] . '-' . bin2hex(random_bytes(4)) . '@deleted.invalid';
+    $randomPassword = password_hash(bin2hex(random_bytes(32)), PASSWORD_DEFAULT);
+    $st = $conn->prepare("UPDATE users SET name=?, email=?, password=?, phone=NULL, address=NULL, city=NULL, bio=NULL, avatar=NULL, worker_approved=0 WHERE id=?");
+    $st->bind_param('sssi', $newName, $newEmail, $randomPassword, $u['id']);
+    $st->execute();
+    if ('worker' === 'worker') {
+      $del = $conn->prepare("DELETE FROM worker_portfolio WHERE worker_id=?");
+      if ($del) { $del->bind_param('i',$u['id']); $del->execute(); }
+    }
+    audit_log('account_self_deleted', "User #".(int)$u['id']." requested account deletion; personal profile fields anonymized and historical records retained");
+    $_SESSION = [];
+    if (ini_get('session.use_cookies')) { $params=session_get_cookie_params(); setcookie(session_name(),'',time()-42000,$params['path'],$params['domain'],$params['secure'],$params['httponly']); }
+    session_destroy();
+    header('Location: ../login.php?account_deleted=1'); exit;
+}
+
+
 /* ---------- Actions (before output so redirects work) ---------- */
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_profile'])) {
     verify_csrf();
     $name    = v_str('name', 100, true, 'Full name');
     $phone   = v_str('phone', 30, false, 'Phone');
     $address = v_str('address', 255, false, 'Address');
-    $city    = v_str('city', 100, false, 'City / Municipality');
+    $city    = 'Polomolok'; // Worker service area is restricted to Polomolok.
     $bio     = v_str('bio', 500, false, 'Bio');
     update_profile($u['id'], $name, $phone, $address, $city, $bio);
     $new = handle_avatar_upload('avatar', $u['id'], $conn);
@@ -88,7 +117,7 @@ require '../layout.php';
 
 <div class="card">
   <div class="profile-head">
-    <?php if ($av): ?><img class="avatar" src="<?= e($av) ?>" alt="Profile picture">
+    <?php if ($av): ?><img class="avatar profile-zoom-trigger" src="<?= e($av) ?>" alt="Profile picture" title="Click to enlarge" tabindex="0" role="button" aria-label="Enlarge profile picture">
     <?php else: ?><div class="avatar"><?= e(initials($u['name'])) ?></div><?php endif; ?>
     <div class="profile-meta">
       <h1 style="margin-bottom:2px;"><?= e($u['name']) ?></h1>
@@ -201,4 +230,16 @@ require '../layout.php';
     </div>
   <?php endif; ?>
 </div>
+
+<div class="card" style="margin-top:18px;border:1px solid #f1b7b7;">
+  <h2 style="color:#b42318;">Delete my account</h2>
+  <p class="muted">No administrator approval is required. To preserve booking, payment, and audit records, your personal profile details will be anonymized and you will be signed out. This action cannot be undone.</p>
+  <form method="post" data-confirm="Delete your account and anonymize your profile? You will be signed out and cannot log in again." data-confirm-title="Delete my account" data-confirm-yes="Delete account">
+    <?= csrf_field() ?>
+    <label for="delete_password">Confirm your current password</label>
+    <input id="delete_password" type="password" name="delete_password" required autocomplete="current-password">
+    <button class="btn" style="background:#b42318;border-color:#b42318;margin-top:10px;" name="delete_my_account" value="1">Delete my account</button>
+  </form>
+</div>
+
 <?php require '../footer.php'; ?>

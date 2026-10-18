@@ -79,7 +79,7 @@ require '../layout.php';
       <?php if($w['near']): ?><span class="near-ribbon">📍 Near you</span><?php else: ?><span class="discover-card-kicker">CHOREHIVE CLEANER</span><?php endif; ?>
       <span class="smart-rank">#<?= $rank ?> match</span>
       <span class="availability-pill <?= $available?'available':'busy' ?>"><i></i><?= $available?'Available':'Currently booked' ?></span>
-      <?php if($avatar): ?><img class="discover-avatar" src="<?= e($avatar) ?>" alt="<?= e($w['name']) ?> profile photo"><?php else: ?><div class="discover-avatar discover-initials"><?= e(initials($w['name'])) ?></div><?php endif; ?>
+      <?php if($avatar): ?><img class="discover-avatar profile-zoom-trigger" src="<?= e($avatar) ?>" alt="<?= e($w['name']) ?> profile photo"><?php else: ?><div class="discover-avatar discover-initials"><?= e(initials($w['name'])) ?></div><?php endif; ?>
       <span class="online-dot <?= $isOnline?'is-online':'' ?>" title="<?= $isOnline?'Recently active':'Not recently active' ?>"></span>
     </div>
     <div class="discover-card-body">
@@ -105,7 +105,7 @@ require '../layout.php';
     <div class="discover-card-top <?= $palette[(int)$w['id']%4] ?>">
       <?php if($w['near']): ?><span class="near-ribbon" title="In your city">📍 Near you</span><?php else: ?><span class="discover-card-kicker">CHOREHIVE CLEANER</span><?php endif; ?>
       <span class="availability-pill <?= $available?'available':'busy' ?>"><i></i><?= $available?'Available':'Currently booked' ?></span>
-      <?php if($avatar): ?><img class="discover-avatar" src="<?= e($avatar) ?>" alt="<?= e($w['name']) ?> profile photo"><?php else: ?><div class="discover-avatar discover-initials"><?= e(initials($w['name'])) ?></div><?php endif; ?>
+      <?php if($avatar): ?><img class="discover-avatar profile-zoom-trigger" src="<?= e($avatar) ?>" alt="<?= e($w['name']) ?> profile photo"><?php else: ?><div class="discover-avatar discover-initials"><?= e(initials($w['name'])) ?></div><?php endif; ?>
       <span class="online-dot <?= $isOnline?'is-online':'' ?>" title="<?= $isOnline?'Recently active':'Not recently active' ?>"></span>
     </div>
     <div class="discover-card-body">

@@ -293,14 +293,26 @@ $workerAvatar = $selected_worker ? avatar_url($selected_worker, ch_base()) : '';
         <?php endif; ?>
         <label for="address">Cleaning address <span class="muted">(required; enter this manually)</span></label>
         <input name="address" id="address" maxlength="255" required autocomplete="street-address" value="<?= e($_POST['address'] ?? $edit_booking['address'] ?? $u['address'] ?? '') ?>" placeholder="House number, street, barangay, city">
+        <?php
+          $initialMapQuery = trim((string)($_POST['address'] ?? $edit_booking['address'] ?? $u['address'] ?? ''));
+          $initialLat = trim((string)($_POST['address_lat'] ?? $edit_booking['address_lat'] ?? ''));
+          $initialLng = trim((string)($_POST['address_lng'] ?? $edit_booking['address_lng'] ?? ''));
+          if ($initialLat !== '' && $initialLng !== '' && is_numeric($initialLat) && is_numeric($initialLng)) {
+              $initialMapQuery = $initialLat . ',' . $initialLng;
+          }
+          if ($initialMapQuery === '') $initialMapQuery = '6.2219,125.0635'; // Polomolok town-centre map pin
+        ?>
+        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
         <div class="map-picker-card">
-          <div class="map-picker-heading"><div><b>Pin the exact location</b><p>Tap the map or drag the pin. Your typed address will not be overwritten.</p></div><button type="button" class="btn btn-outline btn-sm" id="useCurrentLocation">Use my location</button></div>
-          <div id="addressMap" class="address-map" role="application" aria-label="Map to pin cleaning location"></div>
-          <div class="map-picker-footer"><span id="mapPinStatus" role="status" aria-live="polite">No map pin selected. The manual address will still be saved.</span><button type="button" class="map-clear-button" id="clearMapPin">Clear pin</button></div>
-          <small class="map-privacy-note">Map tiles provided by OpenStreetMap contributors. The pin coordinates are shared with the assigned worker to help them find the address. Manual address entry remains the source of truth. <a href="https://www.openstreetmap.org/fixthemap" target="_blank" rel="noopener">Report a map issue</a>.</small>
-          <input type="hidden" name="address_lat" id="address_lat" value="<?= e($_POST['address_lat'] ?? $edit_booking['address_lat'] ?? '') ?>">
-          <input type="hidden" name="address_lng" id="address_lng" value="<?= e($_POST['address_lng'] ?? $edit_booking['address_lng'] ?? '') ?>">
+          <div class="map-picker-heading"><div><b>Pin your cleaning location</b><p>Click anywhere on the map to drop a pin. You can drag the pin to adjust it. Your full street address is still required.</p></div><button type="button" class="btn btn-outline btn-sm" id="useCurrentLocation">Use my location</button></div>
+          <div id="addressMap" class="address-map" role="application" aria-label="Interactive map. Click to place a location pin."></div>
+          <div class="map-picker-footer"><span id="mapPinStatus" role="status" aria-live="polite"><?= $initialLat !== '' && $initialLng !== '' ? 'Saved coordinates: ' . e($initialLat . ', ' . $initialLng) : 'No pin selected yet. Click the map to place one.' ?></span><button type="button" class="map-clear-button" id="clearMapPin">Clear pin</button></div>
+          <p style="margin:8px 0 0;"><a class="btn btn-sm btn-sec" id="openGoogleMaps" href="https://www.google.com/maps/search/?api=1&amp;query=<?= rawurlencode($initialMapQuery) ?>" target="_blank" rel="noopener">Open in Google Maps ↗</a></p>
+          <small class="map-privacy-note">Interactive map powered by OpenStreetMap. Click the map to set the exact pin, drag the marker to fine-tune it, or use your device location. Map tiles require an internet connection.</small>
+          <input type="hidden" name="address_lat" id="address_lat" value="<?= e($initialLat) ?>">
+          <input type="hidden" name="address_lng" id="address_lng" value="<?= e($initialLng) ?>">
         </div>
+        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
         <label for="notes">Additional instructions <span class="muted">(optional)</span></label>
         <textarea name="notes" id="notes" rows="3" maxlength="1000" placeholder="Gate instructions, pets at home, supplies available…"><?= e($_POST['notes'] ?? $edit_booking['notes'] ?? '') ?></textarea>
         <div class="save-address-row" style="margin-top:14px;padding:12px 14px;background:#f5f8ff;border:1px solid #e3e9f2;border-radius:10px;">
@@ -401,24 +413,44 @@ $workerAvatar = $selected_worker ? avatar_url($selected_worker, ch_base()) : '';
   }
 })();
 </script>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
 <script>
 (()=>{
- const el=document.getElementById('addressMap'); if(!el) return;
- const latInput=document.getElementById('address_lat'),lngInput=document.getElementById('address_lng'),status=document.getElementById('mapPinStatus');
- const currentBtn=document.getElementById('useCurrentLocation'),clearBtn=document.getElementById('clearMapPin');
- if(!window.L){el.innerHTML='<div class="map-unavailable">The map could not load. You can still enter the full address manually.</div>';currentBtn.disabled=true;return;}
- const savedLat=Number(latInput.value),savedLng=Number(lngInput.value),hasSaved=latInput.value!==''&&lngInput.value!==''&&Number.isFinite(savedLat)&&Number.isFinite(savedLng);
- const map=L.map(el,{scrollWheelZoom:false}).setView(hasSaved?[savedLat,savedLng]:[6.5009,124.8469],hasSaved?16:12);
- L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a>'}).addTo(map);
+ const mapEl=document.getElementById('addressMap'); if(!mapEl || typeof L === 'undefined') return;
+ const addressInput=document.getElementById('address');
+ const latInput=document.getElementById('address_lat'),lngInput=document.getElementById('address_lng');
+ const status=document.getElementById('mapPinStatus'),currentBtn=document.getElementById('useCurrentLocation');
+ const clearBtn=document.getElementById('clearMapPin'),openLink=document.getElementById('openGoogleMaps');
+ const defaultLat=6.2219, defaultLng=125.0635; // Polomolok town centre
+ const savedLat=Number(latInput.value), savedLng=Number(lngInput.value);
+ const hasSavedPin=latInput.value.trim()!=='' && lngInput.value.trim()!=='' && Number.isFinite(savedLat) && Number.isFinite(savedLng);
+ const initialLat=hasSavedPin?savedLat:defaultLat, initialLng=hasSavedPin?savedLng:defaultLng;
+ const map=L.map(mapEl).setView([initialLat,initialLng],hasSavedPin?16:14);
+ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>'}).addTo(map);
  let marker=null;
- function label(lat,lng){return 'Pinned coordinates: '+lat.toFixed(6)+', '+lng.toFixed(6)+'. Confirm the typed address separately.';}
- function setPin(latlng,zoom){const lat=Number(latlng.lat.toFixed(7)),lng=Number(latlng.lng.toFixed(7));latInput.value=lat;lngInput.value=lng;if(!marker){marker=L.marker([lat,lng],{draggable:true}).addTo(map);marker.on('dragend',()=>{const pos=marker.getLatLng();setPin(pos,0);});}else{marker.setLatLng([lat,lng]);}if(zoom)map.setView([lat,lng],Math.max(map.getZoom(),15));status.textContent=label(lat,lng);status.classList.add('has-pin');}
- function clearPin(){if(marker){map.removeLayer(marker);marker=null;}latInput.value='';lngInput.value='';status.textContent='No map pin selected. The manual address will still be saved.';status.classList.remove('has-pin');}
- window.__choreMapSetPin=function(lat,lng){if(!Number.isFinite(lat)||!Number.isFinite(lng))return;setPin({lat:lat,lng:lng},true);};
- if(hasSaved){setPin({lat:savedLat,lng:savedLng},false);}map.on('click',e=>setPin(e.latlng,false));
- currentBtn.addEventListener('click',()=>{if(!navigator.geolocation){status.textContent='This browser does not support location. You can pin the map manually.';return;}currentBtn.disabled=true;currentBtn.textContent='Locating…';navigator.geolocation.getCurrentPosition(pos=>{setPin({lat:pos.coords.latitude,lng:pos.coords.longitude},true);currentBtn.disabled=false;currentBtn.textContent='Use my location';},err=>{status.textContent=err.code===1?'Location permission was denied. You can still click or drag a pin on the map.':'Your location could not be determined. Please pin the map manually.';currentBtn.disabled=false;currentBtn.textContent='Use my location';},{enableHighAccuracy:true,timeout:10000,maximumAge:60000});});
- clearBtn.addEventListener('click',clearPin);setTimeout(()=>map.invalidateSize(),150);
+ function updateLink(lat,lng){openLink.href='https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(lat+','+lng);}
+ function setPin(lat,lng, message){
+   lat=Number(lat);lng=Number(lng); if(!Number.isFinite(lat)||!Number.isFinite(lng)) return;
+   latInput.value=lat.toFixed(7);lngInput.value=lng.toFixed(7);
+   if(!marker){marker=L.marker([lat,lng],{draggable:true}).addTo(map);marker.on('dragend',()=>{const p=marker.getLatLng();setPin(p.lat,p.lng,'Pin adjusted');});}
+   else marker.setLatLng([lat,lng]);
+   status.textContent=(message||'Location pin selected')+': '+lat.toFixed(6)+', '+lng.toFixed(6)+'. Make sure the address field above is complete.';
+   status.classList.add('has-pin');updateLink(lat,lng);
+ }
+ window.__choreMapSetPin=setPin;
+ if(hasSavedPin){setPin(savedLat,savedLng,'Saved pin');}
+ map.on('click',e=>setPin(e.latlng.lat,e.latlng.lng,'Map pin selected'));
+ function clearPin(){latInput.value='';lngInput.value='';if(marker){map.removeLayer(marker);marker=null;}status.textContent='Pin cleared. Click the map to place a new pin; your typed address will still be saved.';status.classList.remove('has-pin');updateLink(map.getCenter().lat,map.getCenter().lng);}
+ function refreshLinkFromPin(){if(latInput.value&&lngInput.value)updateLink(latInput.value,lngInput.value);else{const q=addressInput.value.trim()||'Polomolok, South Cotabato, Philippines';openLink.href='https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(q);}}
+ addressInput.addEventListener('input',()=>{if(latInput.value||lngInput.value)clearPin();refreshLinkFromPin();});
+ currentBtn.addEventListener('click',()=>{
+   if(!navigator.geolocation){status.textContent='This browser does not support device location. Click the map to place a pin.';return;}
+   currentBtn.disabled=true;currentBtn.textContent='Locating…';
+   navigator.geolocation.getCurrentPosition(pos=>{const lat=pos.coords.latitude,lng=pos.coords.longitude;map.setView([lat,lng],17);setPin(lat,lng,'Device location pinned');currentBtn.disabled=false;currentBtn.textContent='Use my location';},err=>{status.textContent=err.code===1?'Location permission was denied. You can still click the map to place a pin.':'Could not determine your device location. You can still click the map to place a pin.';currentBtn.disabled=false;currentBtn.textContent='Use my location';},{enableHighAccuracy:true,timeout:10000,maximumAge:60000});
+ });
+ clearBtn.addEventListener('click',clearPin);
+ const savedSel=document.getElementById('saved_address');
+ if(savedSel){savedSel.addEventListener('change',()=>{const opt=savedSel.options[savedSel.selectedIndex];if(!opt||!opt.value)return;if(opt.dataset.address)addressInput.value=opt.dataset.address;if(opt.dataset.lat&&opt.dataset.lng&&Number.isFinite(Number(opt.dataset.lat))&&Number.isFinite(Number(opt.dataset.lng))){map.setView([Number(opt.dataset.lat),Number(opt.dataset.lng)],16);setPin(opt.dataset.lat,opt.dataset.lng,'Saved address pin');}else{clearPin();status.textContent='Saved address loaded. Click the map to add a location pin.';refreshLinkFromPin();}});}
+ setTimeout(()=>map.invalidateSize(),150);
 })();
 </script>
 <?php require '../footer.php'; ?>

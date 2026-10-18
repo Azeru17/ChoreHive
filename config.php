@@ -179,7 +179,9 @@ function require_marketplace_schema() {
             FROM information_schema.COLUMNS
             WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='users'");
         $cols = $check ? $check->fetch_assoc() : ['worker_ok' => 0, 'city_ok' => 0];
-        $ready = (int)$cols['worker_ok'] === 1 && (int)$cols['city_ok'] === 1;
+        $tables = $conn->query("SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME IN ('role_id_counters','role_id_freed')");
+        $roleTables = $tables ? $tables->num_rows : 0;
+        $ready = (int)$cols['worker_ok'] === 1 && (int)$cols['city_ok'] === 1 && $roleTables === 2;
     }
     if ($ready) return;
 
@@ -199,9 +201,9 @@ function require_marketplace_schema() {
       ol{padding-left:22px}li{margin:7px 0}code{overflow-wrap:anywhere;background:#f2f5fa;padding:2px 5px;border-radius:5px}
       a{color:#17427a;font-weight:700}small{color:#687992}
     </style></head><body><main><h1>ChoreHive needs a database upgrade</h1>
-      <p class="notice">The current database is missing the worker marketplace-approval schema, so ChoreHive cannot safely load worker listings or booking workflows. No database changes were made automatically.</p>
+      <p class="notice">The current database is missing required marketplace or account-registration schema, so ChoreHive cannot safely load worker listings or booking workflows. No database changes were made automatically.</p>
       <p>For an existing installation, back up the database, then check <code>README.md</code> and apply only the migrations your database has not already received, in the listed order:</p>
-      <ol><li><code>migration_marketplace_chat.sql</code></li><li><code>migration_chat_message_delete.sql</code></li><li><code>migration_payments_maps.sql</code></li><li><code>migration_paymongo.sql</code></li><li><code>migration_new_features.sql</code></li><li><code>migration_user_city.sql</code></li></ol>
+      <ol><li><code>migration_marketplace_chat.sql</code></li><li><code>migration_chat_message_delete.sql</code></li><li><code>migration_payments_maps.sql</code></li><li><code>migration_paymongo.sql</code></li><li><code>migration_new_features.sql</code></li><li><code>migration_user_city.sql</code></li><li><code>migration_role_id_allocation.sql</code></li><li><code>migration_finance_and_worker_location.sql</code> (optional finance features)</li></ol>
       <p>For a fresh installation, import the current <code>db.sql</code> instead. Do not import it over an existing database.</p>
       <p><small>After upgrading, an administrator must explicitly review and approve worker listings.</small></p>
       <p><a href="' . e($base) . '/">Return to ChoreHive</a></p></main></body></html>';
@@ -247,7 +249,9 @@ function booking_is_finished($status) {
 }
 // The checklist is frozen once the client is verifying/paying, so the record stays trustworthy.
 function checklist_is_editable($status) {
-    return !in_array($status, ['awaiting_verification', 'completed'], true);
+    // Only active jobs can be changed. Verification, completion, and cancellation
+    // freeze the checklist so the recorded scope cannot be rewritten afterward.
+    return in_array($status, ['pending', 'assigned', 'in_progress'], true);
 }
 /**
  * Permanently remove a booking. MySQL cascades to checklist_items,
@@ -658,9 +662,9 @@ function v_int($key, $min = 1, $max = PHP_INT_MAX, $label = 'Value') {
 function handle_photo_upload($field, $booking_id, $stage, $conn) {
     // NOTE: don't use empty() here — a successful upload has error === 0 (UPLOAD_ERR_OK),
     // and empty(0) is true, which would silently discard every valid upload.
-    if (!isset($_FILES[$field]) || !is_array($_FILES[$field])) return;
+    if (!isset($_FILES[$field]) || !is_array($_FILES[$field])) return false;
     $f = $_FILES[$field];
-    if (($f['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) return;
+    if (($f['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) return false;
     if ($f['error'] !== UPLOAD_ERR_OK) fail('Upload failed (error code ' . $f['error'] . ').');
     if ($f['size'] > UPLOAD_MAX_BYTES) fail('Photo is too large. Maximum size is 3 MB.');
     if ($f['size'] === 0) fail('Uploaded file is empty.');
@@ -678,4 +682,9 @@ function handle_photo_upload($field, $booking_id, $stage, $conn) {
     $bid = (int)$booking_id;
     $stmt->bind_param('iss', $bid, $stage, $name);
     $stmt->execute();
+    if ($stmt->affected_rows !== 1) {
+        media_delete($name);
+        fail('Could not save the uploaded photo. Please try again.');
+    }
+    return true;
 }

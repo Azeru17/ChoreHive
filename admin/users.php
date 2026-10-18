@@ -76,34 +76,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete'])) {
     
     // Handle foreign key constraints by nullifying/reassigning related records
     // For bookings where worker is deleted, unassign them (set worker_id to NULL) if pending/assigned
-    $conn->query("UPDATE bookings SET worker_id=NULL WHERE worker_id=$uid");
+    $conn->query("UPDATE bookings SET worker_id=NULL WHERE worker_id=" . (int)$uid);
     // For bookings where client is deleted, we need to be careful - but admin deleting is destructive
     // Check if user has client bookings
-    $clientBookings = $conn->query("SELECT COUNT(*) c FROM bookings WHERE client_id=$uid")->fetch_assoc()['c'];
+    $clientBookings = $conn->query("SELECT COUNT(*) c FROM bookings WHERE client_id=" . (int)$uid)->fetch_assoc()['c'];
     if ($clientBookings > 0) {
         // Delete bookings with photos/checklist/feedback (cascades) and notify? But easier: delete_booking_record for each
-        $res = $conn->query("SELECT id FROM bookings WHERE client_id=$uid");
+        $res = $conn->query("SELECT id FROM bookings WHERE client_id=" . (int)$uid);
         while ($b = $res->fetch_assoc()) {
             delete_booking_record($b['id']);
         }
     }
     
     // Clean up other related data
-    $conn->query("DELETE FROM chat_threads WHERE client_id=$uid OR worker_id=$uid");
-    $conn->query("DELETE FROM saved_addresses WHERE client_id=$uid");
-    $conn->query("DELETE FROM worker_portfolio WHERE worker_id=$uid");
-    $conn->query("DELETE FROM badges WHERE worker_id=$uid");
-    $conn->query("DELETE FROM notifications WHERE user_id=$uid");
-    $conn->query("DELETE FROM worker_presence WHERE worker_id=$uid");
-    $conn->query("DELETE FROM password_resets WHERE user_id=$uid");
+    $conn->query("DELETE FROM chat_threads WHERE client_id=" . (int)$uid . " OR worker_id=" . (int)$uid);
+    $conn->query("DELETE FROM saved_addresses WHERE client_id=" . (int)$uid);
+    $conn->query("DELETE FROM worker_portfolio WHERE worker_id=" . (int)$uid);
+    $conn->query("DELETE FROM badges WHERE worker_id=" . (int)$uid);
+    $conn->query("DELETE FROM notifications WHERE user_id=" . (int)$uid);
+    $conn->query("DELETE FROM worker_presence WHERE worker_id=" . (int)$uid);
+    $conn->query("DELETE FROM password_resets WHERE user_id=" . (int)$uid);
     // Skip favorites if table doesn't exist
     if ($conn->query("SELECT 1 FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name='favorites'")->num_rows > 0) {
-        $conn->query("DELETE FROM favorites WHERE client_id=$uid OR worker_id=$uid");
+        $conn->query("DELETE FROM favorites WHERE client_id=" . (int)$uid . " OR worker_id=" . (int)$uid);
     }
     
     // Return ID to freed pool for reuse
     $role = $target['role'] ?? 'client';
-    $conn->query("INSERT IGNORE INTO role_id_freed (role, freed_id) VALUES ('$role', $uid)");
+    $conn->query("INSERT IGNORE INTO role_id_freed (role, freed_id) VALUES ('" . $conn->real_escape_string($role) . "', " . (int)$uid . ")");
     
     $stmt = $conn->prepare("DELETE FROM users WHERE id=?");
     $stmt->bind_param('i', $uid);
@@ -149,12 +149,18 @@ if (isset($_GET['edit'])) {
     $eid = (int)$_GET['edit'];
     $edit = $conn->query("SELECT * FROM users WHERE id=$eid")->fetch_assoc();
 }
+$userSearch = trim((string)($_GET['q'] ?? ''));
+$userRole = trim((string)($_GET['role'] ?? ''));
+$userWhere = [];
+if ($userSearch !== '') { $safeUserSearch=$conn->real_escape_string($userSearch); $userWhere[]="(u.name LIKE '%$safeUserSearch%' OR u.email LIKE '%$safeUserSearch%' OR CAST(u.id AS CHAR) LIKE '%$safeUserSearch%')"; }
+if (in_array($userRole,['client','worker','admin'],true)) $userWhere[]="u.role='".$conn->real_escape_string($userRole)."'";
+$userWhereSql = $userWhere ? ' WHERE '.implode(' AND ',$userWhere) : '';
 $res = $conn->query("SELECT u.*,
   CASE WHEN u.role='worker' THEN (SELECT COUNT(*) FROM bookings b WHERE b.worker_id=u.id)
        ELSE (SELECT COUNT(*) FROM bookings b WHERE b.client_id=u.id) END jobs,
   (SELECT COUNT(*) FROM bookings ba WHERE ba.worker_id=u.id AND ba.status IN ('assigned','in_progress','awaiting_verification')) active_worker_jobs,
   (SELECT last_seen FROM worker_presence wp WHERE wp.worker_id=u.id) worker_last_seen
-  FROM users u ORDER BY u.role, u.name");
+  FROM users u $userWhereSql ORDER BY u.role, u.name");
 $workers = $conn->query("SELECT id,name FROM users WHERE role='worker'")->fetch_all(MYSQLI_ASSOC);
 $badges = $conn->query("SELECT bg.*, u.name worker FROM badges bg JOIN users u ON u.id=bg.worker_id ORDER BY bg.worker_id");
 ?>
@@ -184,8 +190,13 @@ $badges = $conn->query("SELECT bg.*, u.name worker FROM badges bg JOIN users u O
 </div>
 
 <div class="card">
-  <h2>All Users</h2>
+  <h2>All Users <span class="muted" style="font-weight:400;">(<?= (int)$res->num_rows ?> matching)</span></h2>
   <p class="muted">Users register themselves through the registration page. Admins can view and delete accounts.</p>
+  <form method="get" style="display:flex;gap:8px;flex-wrap:wrap;align-items:end;margin-bottom:14px;">
+    <label style="flex:1;min-width:200px;">Search users<input name="q" value="<?= e($userSearch) ?>" placeholder="Name, email or ID"></label>
+    <label>Role<select name="role"><option value="">All users</option><?php foreach(['client'=>'Clients','worker'=>'Workers','admin'=>'Admins'] as $rv=>$rl):?><option value="<?=$rv?>" <?=$userRole===$rv?'selected':''?>><?=$rl?></option><?php endforeach;?></select></label>
+    <button class="btn btn-sm">Filter</button><a class="btn btn-sm btn-sec" href="users.php">Reset</a>
+  </form>
   <div class="table-wrap">
   <table class="users-table">
     <tr><th>ID</th><th>Name</th><th>Email</th><th>Role</th><th>Jobs</th><th>Marketplace status</th><th>Listing review</th><th>Actions</th></tr>

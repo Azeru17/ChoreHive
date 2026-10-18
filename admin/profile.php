@@ -44,7 +44,7 @@ require '../layout.php';
 
 <div class="card">
   <div class="profile-head">
-    <?php if ($av): ?><img class="avatar" src="<?= e($av) ?>" alt="Profile picture">
+    <?php if ($av): ?><img class="avatar profile-zoom-trigger" src="<?= e($av) ?>" alt="Profile picture" title="Click to enlarge" tabindex="0" role="button" aria-label="Enlarge profile picture">
     <?php else: ?><div class="avatar"><?= e(initials($u['name'])) ?></div><?php endif; ?>
     <div class="profile-meta">
       <h1 style="margin-bottom:2px;"><?= e($u['name']) ?></h1>

@@ -23,6 +23,8 @@
 // Public site URL with no trailing slash, e.g. https://chorehive.yourdomain.com
 define('APP_URL', '');
 
+// ChoreHive uses a no-API-key Google Maps iframe embed for the booking location preview.
+
 define('PAYMONGO_SECRET_KEY', '');
 define('PAYMONGO_PUBLIC_KEY', '');
 define('PAYMONGO_WEBHOOK_SECRET', '');

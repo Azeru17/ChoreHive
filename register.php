@@ -1,5 +1,6 @@
 <?php
 require 'config.php';
+require_marketplace_schema();
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     verify_csrf();
     $name  = v_str('name', 100, true, 'Full name');

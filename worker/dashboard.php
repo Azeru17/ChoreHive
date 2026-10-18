@@ -13,6 +13,12 @@ $avg = $conn->query("SELECT AVG(f.rating) r, COUNT(f.id) c FROM feedback f
   JOIN bookings b ON b.id=f.booking_id WHERE b.worker_id={$u['id']}")->fetch_assoc();
 $badges = $conn->query("SELECT COUNT(*) c FROM badges WHERE worker_id={$u['id']}")->fetch_assoc()['c'];
 $workerReview = $conn->query("SELECT worker_approved FROM users WHERE id=" . (int)$u['id'])->fetch_assoc();
+$financeReady = ($conn->query("SHOW TABLES LIKE 'worker_finance_entries'")->num_rows > 0);
+$workerFinance = ['payout'=>0,'bonus'=>0,'deduction'=>0,'discount'=>0];
+if ($financeReady) {
+  $fres = $conn->query("SELECT entry_type, COALESCE(SUM(amount),0) total FROM worker_finance_entries WHERE worker_id=".(int)$u['id']." GROUP BY entry_type");
+  while ($fr=$fres->fetch_assoc()) $workerFinance[$fr['entry_type']] = (float)$fr['total'];
+}
 $myjobs = $conn->query("SELECT b.*, s.name service, c.name client FROM bookings b
   JOIN services s ON s.id=b.service_id JOIN users c ON c.id=b.client_id
   WHERE b.worker_id={$u['id']} AND b.status IN ('assigned','in_progress','awaiting_verification')
@@ -28,6 +34,22 @@ $myjobs = $conn->query("SELECT b.*, s.name service, c.name client FROM bookings 
   <div class="stat"><b><?= (int)($stats['completed'] ?? 0) ?></b>Completed</div>
   <div class="stat"><b><?= $avg['c'] ? number_format($avg['r'], 1) . ' ⭐' : '—' ?></b>Rating (<?= (int)$avg['c'] ?>)</div>
   <div class="stat"><b><?= (int)$badges ?></b>Administrator-managed badges</div>
+</div>
+<div class="card" style="margin-top:16px;">
+  <h2>My payment summary</h2>
+  <p class="muted">These figures reflect financial entries recorded by the administrator. Completed booking value is not automatically a confirmed worker payout.</p>
+  <div class="grid">
+    <div class="stat"><b>₱<?= number_format((float)($workerFinance['payout'] ?? 0),2) ?></b>Recorded payouts</div>
+    <div class="stat"><b>₱<?= number_format((float)($workerFinance['bonus'] ?? 0),2) ?></b>Bonuses / raises</div>
+    <div class="stat"><b>₱<?= number_format((float)($workerFinance['deduction'] ?? 0),2) ?></b>Deductions</div>
+    <div class="stat"><b>₱<?= number_format((float)($workerFinance['discount'] ?? 0),2) ?></b>Discount adjustments</div>
+  </div>
+  <?php if (!$financeReady): ?><p class="muted">Payment ledger setup is pending. Ask the administrator to import <code>migration_finance_and_worker_location.sql</code>.</p><?php else: ?>
+  <div class="table-wrap"><table><tr><th>Date</th><th>Type</th><th>Amount</th><th>Description</th></tr>
+  <?php $myFinance=$conn->query("SELECT entry_type,amount,note,created_at FROM worker_finance_entries WHERE worker_id=".(int)$u['id']." ORDER BY created_at DESC LIMIT 20");
+  if (!$myFinance->num_rows): ?><tr><td colspan="4" class="muted">No payment entries recorded yet.</td></tr><?php endif;
+  while($pay=$myFinance->fetch_assoc()): ?><tr><td><?= e(date('M j, Y',strtotime($pay['created_at']))) ?></td><td><?= e(ucfirst($pay['entry_type'])) ?></td><td>₱<?= number_format((float)$pay['amount'],2) ?></td><td><?= e($pay['note']) ?></td></tr><?php endwhile; ?></table></div>
+  <?php endif; ?>
 </div>
 <div class="card" style="margin-top:16px;">
   <h2>Quick actions</h2>

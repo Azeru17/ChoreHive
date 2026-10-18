@@ -31,7 +31,15 @@ FEATURE NOTES:
 - GCash and Maya are processed by PayMongo Checkout. There is no in-app OTP page.
 - The worker cannot start an online-method booking while its payment status is unpaid.
 - Paid bookings show a ChoreHive receipt (PayMongo payment id as the reference for online payments).
-- The map uses Leaflet and OpenStreetMap tiles; an internet connection is required for map assets/tiles.
+- The booking location uses a no-key Google Maps iframe preview; an internet connection is required. It follows the typed address, while browser geolocation can save coordinates with permission. The embedded map itself cannot return clicked-pin coordinates.
 
 HOSTINGER:
 Place config.local.php on the server only. Set APP_URL, database overrides, PayMongo keys, SMTP, and the webhook URL https://YOUR_DOMAIN/paymongo_webhook.php. Do not import the local .test seed users for production; register real accounts.
+
+
+FINAL FEATURE UPDATE (2026-10-18)
+- Import migration_finance_and_worker_location.sql after the existing ChoreHive migrations. It creates the worker finance ledger and standardizes worker municipality to Polomolok while preserving each street address.
+- Admin: finance.php records worker payouts, bonuses/raises, deductions, discounts and expenses; shows a daily income/expense line chart. Booking management includes search/status filters and before/after photo review. User management includes search and role filters.
+- Worker dashboard shows administrator-recorded payouts and adjustments after the finance migration is imported.
+- Client and worker profile pages offer self-service account deletion after password confirmation. Personal profile fields are anonymized to preserve booking/payment/audit history.
+- Profile photos remain circular and can be clicked to open the full-size image.

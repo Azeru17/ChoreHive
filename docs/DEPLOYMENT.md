@@ -107,7 +107,7 @@ The command-line routes end with the same verification block that
 
 ```
 --- schema check ---
-OK  all 22 expected tables present
+OK  all 23 expected tables present
 OK  all expected columns present
 OK  role_id_counters: client=1, worker=1, admin=1
 RESULT: ready
@@ -213,9 +213,9 @@ The repository already contains everything needed:
 
 - `vercel.json` — routes every `*.php` request through the `api/index.php`
   PHP function and 404s the internal helpers (`config.php`, `layout.php`,
-  `_run_migration.php`, `uploads/`, `.git`, …).
+  `uploads/`, `.git`, and internal helpers).
 - `.vercelignore` — keeps `config.local.php`, `db*.sql`, `migration_*.sql`,
-  the `.docx` and local uploads out of the bundle.
+  generated SQL files, migrations, development tools, and local uploads out of the bundle.
 - `.gitignore` — `config.local.php` is never committed.
 
 ---

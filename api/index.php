@@ -24,8 +24,6 @@ if (
         'footer.php',
         'worker_data.php',
         'paymongo.php',
-        '_check.php',
-        '_run_migration.php',
     ], true)
 ) {
     http_response_code(404);
